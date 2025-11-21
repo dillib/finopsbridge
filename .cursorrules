@@ -1,0 +1,10 @@
+# FinOpsBridge Project Rules
+
+This is a monorepo containing:
+- `/web` - Next.js 15 frontend
+- `/api` - Go 1.23 backend
+
+Use TypeScript for frontend, Go for backend.
+Follow the existing code structure and patterns.
+
+
