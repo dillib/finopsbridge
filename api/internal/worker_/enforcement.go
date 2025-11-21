@@ -5,10 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"finopsbridge/api/internal/config"
-	"finopsbridge/api/internal/models"
-	"finopsbridge/api/internal/opa"
-	"finopsbridge/api/internal/cloud"
+	"finopsbridge/api/internal/config_"
+	"finopsbridge/api/internal/models_"
+	"finopsbridge/api/internal/opa_"
+	"finopsbridge/api/internal/cloud_"
 	"net/http"
 	"time"
 
@@ -17,11 +17,11 @@ import (
 
 type EnforcementWorker struct {
 	DB     *gorm.DB
-	OPA    *opa.Engine
-	Config *config.Config
+	OPA    *opa_.Engine
+	Config *config_.Config
 }
 
-func NewEnforcementWorker(db *gorm.DB, opaEngine *opa.Engine, cfg *config.Config) *EnforcementWorker {
+func NewEnforcementWorker(db *gorm.DB, opaEngine *opa_.Engine, cfg *config_.Config) *EnforcementWorker {
 	return &EnforcementWorker{
 		DB:     db,
 		OPA:    opaEngine,
@@ -50,14 +50,14 @@ func (w *EnforcementWorker) run(ctx context.Context) {
 	fmt.Println("Running enforcement worker...")
 
 	// Get all enabled policies
-	var policies []models.Policy
+	var policies []models_.Policy
 	if err := w.DB.Where("enabled = ?", true).Find(&policies).Error; err != nil {
 		fmt.Printf("Error fetching policies: %v\n", err)
 		return
 	}
 
 	// Get all connected cloud providers
-	var providers []models.CloudProvider
+	var providers []models_.CloudProvider
 	if err := w.DB.Where("status = ?", "connected").Find(&providers).Error; err != nil {
 		fmt.Printf("Error fetching cloud providers: %v\n", err)
 		return
@@ -69,7 +69,7 @@ func (w *EnforcementWorker) run(ctx context.Context) {
 	}
 }
 
-func (w *EnforcementWorker) processProvider(ctx context.Context, provider models.CloudProvider, policies []models.Policy) {
+func (w *EnforcementWorker) processProvider(ctx context.Context, provider models_.CloudProvider, policies []models_.Policy) {
 	fmt.Printf("Processing provider: %s (%s)\n", provider.Name, provider.Type)
 
 	// Fetch billing data based on provider type
@@ -78,11 +78,11 @@ func (w *EnforcementWorker) processProvider(ctx context.Context, provider models
 
 	switch provider.Type {
 	case "aws":
-		billingData, err = cloud.FetchAWSBilling(ctx, provider, w.Config)
-	case "azure":
-		billingData, err = cloud.FetchAzureBilling(ctx, provider, w.Config)
-	case "gcp":
-		billingData, err = cloud.FetchGCPBilling(ctx, provider, w.Config)
+		billingData, err = cloud_.FetchAWSBilling(ctx, provider, w.Config)
+		case "azure":
+		billingData, err = cloud_.FetchAzureBilling(ctx, provider, w.Config)
+		case "gcp":
+		billingData, err = cloud_.FetchGCPBilling(ctx, provider, w.Config)
 	default:
 		fmt.Printf("Unknown provider type: %s\n", provider.Type)
 		return
@@ -109,7 +109,7 @@ func (w *EnforcementWorker) processProvider(ctx context.Context, provider models
 	}
 }
 
-func (w *EnforcementWorker) evaluatePolicy(ctx context.Context, policy models.Policy, provider models.CloudProvider, billingData map[string]interface{}) {
+func (w *EnforcementWorker) evaluatePolicy(ctx context.Context, policy models_.Policy, provider models_.CloudProvider, billingData map[string]interface{}) {
 	// Prepare input for OPA
 	input := map[string]interface{}{
 		"account_id":     provider.AccountID,
@@ -137,7 +137,7 @@ func (w *EnforcementWorker) evaluatePolicy(ctx context.Context, policy models.Po
 	}
 }
 
-func (w *EnforcementWorker) handleViolation(ctx context.Context, policy models.Policy, provider models.CloudProvider, result map[string]interface{}) {
+func (w *EnforcementWorker) handleViolation(ctx context.Context, policy models_.Policy, provider models_.CloudProvider, result map[string]interface{}) {
 	fmt.Printf("Policy violation detected: %s\n", policy.Name)
 
 	// Extract violation details
@@ -147,13 +147,13 @@ func (w *EnforcementWorker) handleViolation(ctx context.Context, policy models.P
 	}
 
 	// Check if violation already exists
-	var existingViolation models.PolicyViolation
+	var existingViolation models_.PolicyViolation
 	err := w.DB.Where("policy_id = ? AND status = ?", policy.ID, "pending").
 		First(&existingViolation).Error
 
 	if err == gorm.ErrRecordNotFound {
 		// Create new violation
-		violation := models.PolicyViolation{
+		violation := models_.PolicyViolation{
 			PolicyID:      policy.ID,
 			ResourceID:    provider.ID,
 			ResourceType:  "cloud_provider",
@@ -169,7 +169,7 @@ func (w *EnforcementWorker) handleViolation(ctx context.Context, policy models.P
 		}
 
 		// Create activity log
-		activityLog := models.ActivityLog{
+		activityLog := models_.ActivityLog{
 			OrganizationID: policy.OrganizationID,
 			Type:           "policy_violation",
 			Message:        fmt.Sprintf("Policy '%s' violation: %s", policy.Name, message),
@@ -185,20 +185,20 @@ func (w *EnforcementWorker) handleViolation(ctx context.Context, policy models.P
 	}
 }
 
-func (w *EnforcementWorker) remediate(ctx context.Context, policy models.Policy, provider models.CloudProvider, violation models.PolicyViolation) {
+func (w *EnforcementWorker) remediate(ctx context.Context, policy models_.Policy, provider models_.CloudProvider, violation models_.PolicyViolation) {
 	fmt.Printf("Attempting remediation for policy: %s\n", policy.Name)
 
 	var err error
 	switch policy.Type {
 	case "max_spend":
 		// Stop non-essential resources
-		err = cloud.StopNonEssentialResources(ctx, provider, w.Config)
-	case "block_instance_type":
+		err = cloud_.StopNonEssentialResources(ctx, provider, w.Config)
+		case "block_instance_type":
 		// Terminate oversized instances
-		err = cloud.TerminateOversizedInstances(ctx, provider, w.Config)
-	case "auto_stop_idle":
+		err = cloud_.TerminateOversizedInstances(ctx, provider, w.Config)
+		case "auto_stop_idle":
 		// Stop idle resources
-		err = cloud.StopIdleResources(ctx, provider, w.Config)
+		err = cloud_.StopIdleResources(ctx, provider, w.Config)
 	case "require_tags":
 		// Tag resources (no remediation, just notification)
 		return
@@ -225,15 +225,15 @@ func (w *EnforcementWorker) remediate(ctx context.Context, policy models.Policy,
 	w.DB.Create(&activityLog)
 }
 
-func (w *EnforcementWorker) sendWebhooks(orgID string, violation models.PolicyViolation) {
-	var webhooks []models.Webhook
+func (w *EnforcementWorker) sendWebhooks(orgID string, violation models_.PolicyViolation) {
+	var webhooks []models_.Webhook
 	if err := w.DB.Where("organization_id = ? AND enabled = ?", orgID, true).Find(&webhooks).Error; err != nil {
 		fmt.Printf("Error fetching webhooks: %v\n", err)
 		return
 	}
 
 	// Get policy details for webhook message
-	var policy models.Policy
+	var policy models_.Policy
 	if err := w.DB.Where("id = ?", violation.PolicyID).First(&policy).Error; err != nil {
 		fmt.Printf("Error fetching policy for webhook: %v\n", err)
 		return
@@ -254,7 +254,7 @@ func (w *EnforcementWorker) sendWebhooks(orgID string, violation models.PolicyVi
 	}
 }
 
-func (w *EnforcementWorker) formatWebhookPayload(webhookType string, policy models.Policy, violation models.PolicyViolation) []byte {
+func (w *EnforcementWorker) formatWebhookPayload(webhookType string, policy models_.Policy, violation models_.PolicyViolation) []byte {
 	timestamp := time.Now().Format(time.RFC3339)
 	severityEmoji := map[string]string{
 		"low":      "⚠️",

@@ -2,7 +2,7 @@ package middleware
 
 import (
 	"encoding/json"
-	"finopsbridge/api/internal/config"
+	"finopsbridge/api/internal/config_"
 	"strings"
 
 	"github.com/clerkinc/clerk-sdk-go/clerk"

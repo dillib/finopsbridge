@@ -8,12 +8,12 @@ import (
 	"syscall"
 	"time"
 
-	"finopsbridge/api/internal/config"
-	"finopsbridge/api/internal/database"
-	"finopsbridge/api/internal/handlers"
-	"finopsbridge/api/internal/middleware"
-	"finopsbridge/api/internal/opa"
-	"finopsbridge/api/internal/worker"
+	"finopsbridge/api/internal/config_"
+	"finopsbridge/api/internal/database_"
+	"finopsbridge/api/internal/handlers_"
+	"finopsbridge/api/internal/middleware_"
+	"finopsbridge/api/internal/opa_"
+	"finopsbridge/api/internal/worker_"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -23,16 +23,16 @@ import (
 
 func main() {
 	// Load configuration
-	cfg := config.Load()
+	cfg := config_.Load()
 
 	// Initialize database
-	db, err := database.Initialize(cfg.DatabaseURL)
+	db, err := database_.Initialize(cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 
 	// Initialize OPA
-	opaEngine, err := opa.Initialize(cfg.OPADir)
+	opaEngine, err := opa_.Initialize(cfg.OPADir)
 	if err != nil {
 		log.Fatalf("Failed to initialize OPA: %v", err)
 	}
@@ -65,7 +65,7 @@ func main() {
 
 	// API routes
 	api := app.Group("/api")
-	api.Use(middleware.ClerkAuth(cfg.ClerkSecretKey))
+	api.Use(middleware_.ClerkAuth(cfg.ClerkSecretKey))
 
 	// Waitlist (public)
 	app.Post("/api/waitlist", h.CreateWaitlistEntry)

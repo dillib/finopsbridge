@@ -2,9 +2,9 @@ package main
 
 import (
 	"encoding/json"
-	"finopsbridge/api/internal/database"
-	"finopsbridge/api/internal/models"
-	"finopsbridge/api/internal/policygen"
+	"finopsbridge/api/internal/database_"
+	"finopsbridge/api/internal/models_"
+	"finopsbridge/api/internal/policygen_"
 	"log"
 	"os"
 	"time"
@@ -16,17 +16,17 @@ func main() {
 		dbURL = "postgres://user:password@localhost:5432/finopsbridge?sslmode=disable"
 	}
 
-	db, err := database.Initialize(dbURL)
+	db, err := database_.Initialize(dbURL)
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 
 	// Create a test organization
-	org := models.Organization{
+	org := models_.Organization{
 		ClerkOrgID: "org_test_123",
 		Name:       "Test Organization",
 	}
-	if err := db.FirstOrCreate(&org, models.Organization{ClerkOrgID: org.ClerkOrgID}).Error; err != nil {
+		if err := db.FirstOrCreate(&org, models_.Organization{ClerkOrgID: org.ClerkOrgID}).Error; err != nil {
 		log.Fatalf("Failed to create organization: %v", err)
 	}
 
@@ -65,7 +65,7 @@ func main() {
 	}
 
 	for _, p := range policies {
-		rego, err := policygen.GenerateRego(p.policyType, p.config)
+		rego, err := policygen_.GenerateRego(p.policyType, p.config)
 		if err != nil {
 			log.Printf("Failed to generate Rego for %s: %v", p.name, err)
 			continue
@@ -73,7 +73,7 @@ func main() {
 
 		configJSON, _ := json.Marshal(p.config)
 
-		policy := models.Policy{
+		policy := models_.Policy{
 			OrganizationID: org.ID,
 			Name:           p.name,
 			Description:    p.description,

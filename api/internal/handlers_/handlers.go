@@ -2,11 +2,11 @@ package handlers
 
 import (
 	"encoding/json"
-	"finopsbridge/api/internal/config"
-	"finopsbridge/api/internal/middleware"
-	"finopsbridge/api/internal/models"
-	"finopsbridge/api/internal/opa"
-	"finopsbridge/api/internal/policygen"
+	"finopsbridge/api/internal/config_"
+	"finopsbridge/api/internal/middleware_"
+	"finopsbridge/api/internal/models_"
+	"finopsbridge/api/internal/opa_"
+	"finopsbridge/api/internal/policygen_"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -15,11 +15,11 @@ import (
 
 type Handlers struct {
 	DB       *gorm.DB
-	OPA      *opa.Engine
-	Config   *config.Config
+	OPA      *opa_.Engine
+	Config   *config_.Config
 }
 
-func New(db *gorm.DB, opaEngine *opa.Engine, cfg *config.Config) *Handlers {
+func New(db *gorm.DB, opaEngine *opa_.Engine, cfg *config_.Config) *Handlers {
 	return &Handlers{
 		DB:     db,
 		OPA:    opaEngine,
@@ -54,7 +54,7 @@ func (h *Handlers) CreateWaitlistEntry(c *fiber.Ctx) error {
 		})
 	}
 
-	entry := models.WaitlistEntry{
+	entry := models_.WaitlistEntry{
 		Email:   req.Email,
 		Name:    req.Name,
 		Company: req.Company,
@@ -70,7 +70,7 @@ func (h *Handlers) CreateWaitlistEntry(c *fiber.Ctx) error {
 }
 
 func (h *Handlers) GetDashboardStats(c *fiber.Ctx) error {
-	orgID := middleware.GetOrgID(c)
+	orgID := middleware_.GetOrgID(c)
 	if orgID == "" {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "Organization ID required",
@@ -79,27 +79,27 @@ func (h *Handlers) GetDashboardStats(c *fiber.Ctx) error {
 
 	// Get total spend
 	var totalSpend float64
-	h.DB.Model(&models.CloudProvider{}).
+	h.DB.Model(&models_.CloudProvider{}).
 		Where("organization_id = ? AND status = ?", orgID, "connected").
 		Select("COALESCE(SUM(monthly_spend), 0)").
 		Scan(&totalSpend)
 
 	// Get active policies count
 	var activePolicies int64
-	h.DB.Model(&models.Policy{}).
+	h.DB.Model(&models_.Policy{}).
 		Where("organization_id = ? AND enabled = ?", orgID, true).
 		Count(&activePolicies)
 
 	// Get connected clouds count
 	var connectedClouds int64
-	h.DB.Model(&models.CloudProvider{}).
+	h.DB.Model(&models_.CloudProvider{}).
 		Where("organization_id = ? AND status = ?", orgID, "connected").
 		Count(&connectedClouds)
 
 	// Get violations count (this month)
 	var violations int64
 	startOfMonth := time.Now().AddDate(0, 0, -time.Now().Day()+1)
-	h.DB.Model(&models.PolicyViolation{}).
+	h.DB.Model(&models_.PolicyViolation{}).
 		Joins("JOIN policies ON policy_violations.policy_id = policies.id").
 		Where("policies.organization_id = ? AND policy_violations.created_at >= ?", orgID, startOfMonth).
 		Count(&violations)
@@ -109,7 +109,7 @@ func (h *Handlers) GetDashboardStats(c *fiber.Ctx) error {
 		Provider string  `json:"provider"`
 		Amount   float64 `json:"amount"`
 	}
-	h.DB.Model(&models.CloudProvider{}).
+	h.DB.Model(&models_.CloudProvider{}).
 		Where("organization_id = ? AND status = ?", orgID, "connected").
 		Select("type as provider, COALESCE(SUM(monthly_spend), 0) as amount").
 		Group("type").
@@ -123,7 +123,7 @@ func (h *Handlers) GetDashboardStats(c *fiber.Ctx) error {
 	for i := 5; i >= 0; i-- {
 		month := time.Now().AddDate(0, -i, 0)
 		var amount float64
-		h.DB.Model(&models.CloudProvider{}).
+		h.DB.Model(&models_.CloudProvider{}).
 			Where("organization_id = ? AND status = ?", orgID, "connected").
 			Select("COALESCE(SUM(monthly_spend), 0)").
 			Scan(&amount)
@@ -138,7 +138,7 @@ func (h *Handlers) GetDashboardStats(c *fiber.Ctx) error {
 
 	// Get remediations count
 	var remediations int64
-	h.DB.Model(&models.PolicyViolation{}).
+	h.DB.Model(&models_.PolicyViolation{}).
 		Joins("JOIN policies ON policy_violations.policy_id = policies.id").
 		Where("policies.organization_id = ? AND policy_violations.status = ?", orgID, "remediated").
 		Count(&remediations)
@@ -155,14 +155,14 @@ func (h *Handlers) GetDashboardStats(c *fiber.Ctx) error {
 }
 
 func (h *Handlers) ListPolicies(c *fiber.Ctx) error {
-	orgID := middleware.GetOrgID(c)
+	orgID := middleware_.GetOrgID(c)
 	if orgID == "" {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "Organization ID required",
 		})
 	}
 
-	var policies []models.Policy
+	var policies []models_.Policy
 	if err := h.DB.Where("organization_id = ?", orgID).
 		Preload("Violations", "status = ?", "pending").
 		Find(&policies).Error; err != nil {
@@ -209,10 +209,10 @@ func (h *Handlers) ListPolicies(c *fiber.Ctx) error {
 }
 
 func (h *Handlers) GetPolicy(c *fiber.Ctx) error {
-	orgID := middleware.GetOrgID(c)
+	orgID := middleware_.GetOrgID(c)
 	id := c.Params("id")
 
-	var policy models.Policy
+	var policy models_.Policy
 	if err := h.DB.Where("id = ? AND organization_id = ?", id, orgID).First(&policy).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "Policy not found",
@@ -236,7 +236,7 @@ func (h *Handlers) GetPolicy(c *fiber.Ctx) error {
 }
 
 func (h *Handlers) CreatePolicy(c *fiber.Ctx) error {
-	orgID := middleware.GetOrgID(c)
+	orgID := middleware_.GetOrgID(c)
 	if orgID == "" {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "Organization ID required",
@@ -257,7 +257,7 @@ func (h *Handlers) CreatePolicy(c *fiber.Ctx) error {
 	}
 
 	// Generate Rego policy
-	rego, err := policygen.GenerateRego(req.Type, req.Config)
+	rego, err := policygen_.GenerateRego(req.Type, req.Config)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "Failed to generate policy: " + err.Error(),
@@ -266,7 +266,7 @@ func (h *Handlers) CreatePolicy(c *fiber.Ctx) error {
 
 	configJSON, _ := json.Marshal(req.Config)
 
-	policy := models.Policy{
+	policy := models_.Policy{
 		OrganizationID: orgID,
 		Name:           req.Name,
 		Description:    req.Description,
@@ -286,7 +286,7 @@ func (h *Handlers) CreatePolicy(c *fiber.Ctx) error {
 	h.OPA.ReloadPolicies()
 
 	// Create activity log
-	activityLog := models.ActivityLog{
+	activityLog := models_.ActivityLog{
 		OrganizationID: orgID,
 		Type:           "policy_created",
 		Message:        "Policy '" + policy.Name + "' was created",
@@ -308,7 +308,7 @@ func (h *Handlers) CreatePolicy(c *fiber.Ctx) error {
 }
 
 func (h *Handlers) UpdatePolicy(c *fiber.Ctx) error {
-	orgID := middleware.GetOrgID(c)
+	orgID := middleware_.GetOrgID(c)
 	id := c.Params("id")
 
 	var req struct {
@@ -321,7 +321,7 @@ func (h *Handlers) UpdatePolicy(c *fiber.Ctx) error {
 		})
 	}
 
-	var policy models.Policy
+	var policy models_.Policy
 	if err := h.DB.Where("id = ? AND organization_id = ?", id, orgID).First(&policy).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "Policy not found",
@@ -348,10 +348,10 @@ func (h *Handlers) UpdatePolicy(c *fiber.Ctx) error {
 }
 
 func (h *Handlers) DeletePolicy(c *fiber.Ctx) error {
-	orgID := middleware.GetOrgID(c)
+	orgID := middleware_.GetOrgID(c)
 	id := c.Params("id")
 
-	if err := h.DB.Where("id = ? AND organization_id = ?", id, orgID).Delete(&models.Policy{}).Error; err != nil {
+		if err := h.DB.Where("id = ? AND organization_id = ?", id, orgID).Delete(&models_.Policy{}).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to delete policy",
 		})
@@ -364,14 +364,14 @@ func (h *Handlers) DeletePolicy(c *fiber.Ctx) error {
 }
 
 func (h *Handlers) ListCloudProviders(c *fiber.Ctx) error {
-	orgID := middleware.GetOrgID(c)
+	orgID := middleware_.GetOrgID(c)
 	if orgID == "" {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "Organization ID required",
 		})
 	}
 
-	var providers []models.CloudProvider
+	var providers []models_.CloudProvider
 	if err := h.DB.Where("organization_id = ?", orgID).Find(&providers).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to fetch cloud providers",
@@ -401,10 +401,10 @@ func (h *Handlers) ListCloudProviders(c *fiber.Ctx) error {
 }
 
 func (h *Handlers) GetCloudProvider(c *fiber.Ctx) error {
-	orgID := middleware.GetOrgID(c)
+	orgID := middleware_.GetOrgID(c)
 	id := c.Params("id")
 
-	var provider models.CloudProvider
+	var provider models_.CloudProvider
 	if err := h.DB.Where("id = ? AND organization_id = ?", id, orgID).First(&provider).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "Cloud provider not found",
@@ -429,7 +429,7 @@ func (h *Handlers) GetCloudProvider(c *fiber.Ctx) error {
 }
 
 func (h *Handlers) CreateCloudProvider(c *fiber.Ctx) error {
-	orgID := middleware.GetOrgID(c)
+	orgID := middleware_.GetOrgID(c)
 	if orgID == "" {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "Organization ID required",
@@ -454,7 +454,7 @@ func (h *Handlers) CreateCloudProvider(c *fiber.Ctx) error {
 	credentialsJSON, _ := json.Marshal(req.Credentials)
 	now := time.Now()
 
-	provider := models.CloudProvider{
+	provider := models_.CloudProvider{
 		OrganizationID: orgID,
 		Type:           req.Type,
 		Name:           req.Name,
@@ -473,7 +473,7 @@ func (h *Handlers) CreateCloudProvider(c *fiber.Ctx) error {
 	}
 
 	// Create activity log
-	activityLog := models.ActivityLog{
+	activityLog := models_.ActivityLog{
 		OrganizationID: orgID,
 		Type:           "cloud_connected",
 		Message:        "Cloud provider '" + provider.Name + "' (" + provider.Type + ") was connected",
@@ -494,10 +494,10 @@ func (h *Handlers) CreateCloudProvider(c *fiber.Ctx) error {
 }
 
 func (h *Handlers) DeleteCloudProvider(c *fiber.Ctx) error {
-	orgID := middleware.GetOrgID(c)
+	orgID := middleware_.GetOrgID(c)
 	id := c.Params("id")
 
-	if err := h.DB.Where("id = ? AND organization_id = ?", id, orgID).Delete(&models.CloudProvider{}).Error; err != nil {
+		if err := h.DB.Where("id = ? AND organization_id = ?", id, orgID).Delete(&models_.CloudProvider{}).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to delete cloud provider",
 		})
@@ -507,14 +507,14 @@ func (h *Handlers) DeleteCloudProvider(c *fiber.Ctx) error {
 }
 
 func (h *Handlers) ListActivityLogs(c *fiber.Ctx) error {
-	orgID := middleware.GetOrgID(c)
+	orgID := middleware_.GetOrgID(c)
 	if orgID == "" {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "Organization ID required",
 		})
 	}
 
-	var logs []models.ActivityLog
+	var logs []models_.ActivityLog
 	if err := h.DB.Where("organization_id = ?", orgID).
 		Order("created_at DESC").
 		Limit(100).
@@ -542,14 +542,14 @@ func (h *Handlers) ListActivityLogs(c *fiber.Ctx) error {
 }
 
 func (h *Handlers) ListWebhooks(c *fiber.Ctx) error {
-	orgID := middleware.GetOrgID(c)
+	orgID := middleware_.GetOrgID(c)
 	if orgID == "" {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "Organization ID required",
 		})
 	}
 
-	var webhooks []models.Webhook
+	var webhooks []models_.Webhook
 	if err := h.DB.Where("organization_id = ?", orgID).Find(&webhooks).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to fetch webhooks",
@@ -571,7 +571,7 @@ func (h *Handlers) ListWebhooks(c *fiber.Ctx) error {
 }
 
 func (h *Handlers) CreateWebhook(c *fiber.Ctx) error {
-	orgID := middleware.GetOrgID(c)
+	orgID := middleware_.GetOrgID(c)
 	if orgID == "" {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "Organization ID required",
@@ -589,7 +589,7 @@ func (h *Handlers) CreateWebhook(c *fiber.Ctx) error {
 		})
 	}
 
-	webhook := models.Webhook{
+	webhook := models_.Webhook{
 		OrganizationID: orgID,
 		Type:          req.Type,
 		URL:           req.URL,
@@ -606,10 +606,10 @@ func (h *Handlers) CreateWebhook(c *fiber.Ctx) error {
 }
 
 func (h *Handlers) DeleteWebhook(c *fiber.Ctx) error {
-	orgID := middleware.GetOrgID(c)
+	orgID := middleware_.GetOrgID(c)
 	id := c.Params("id")
 
-	if err := h.DB.Where("id = ? AND organization_id = ?", id, orgID).Delete(&models.Webhook{}).Error; err != nil {
+		if err := h.DB.Where("id = ? AND organization_id = ?", id, orgID).Delete(&models_.Webhook{}).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to delete webhook",
 		})
