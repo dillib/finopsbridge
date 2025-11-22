@@ -1,9 +1,9 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Policy, Cloud, Activity, Webhook, Shield, TrendingUp } from "lucide-react"
+import { ScrollText, Cloud, Activity, Webhook, Shield, TrendingUp } from "lucide-react"
 
 const features = [
   {
-    icon: Policy,
+    icon: ScrollText,
     title: "No-Code Policy Builder",
     description: "Create governance policies with a visual drag-and-drop interface. No Rego knowledge required.",
   },
