@@ -1,0 +1,2 @@
+# Ignore Go backend - deployed separately on Fly.io
+api/
