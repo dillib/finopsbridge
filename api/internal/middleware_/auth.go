@@ -1,19 +1,15 @@
 package middleware
 
 import (
-	"encoding/json"
-	"finopsbridge/api/internal/config_"
 	"strings"
 
-	"github.com/clerkinc/clerk-sdk-go/clerk"
+	"github.com/clerk/clerk-sdk-go/v2"
+	"github.com/clerk/clerk-sdk-go/v2/jwt"
 	"github.com/gofiber/fiber/v2"
 )
 
 func ClerkAuth(secretKey string) fiber.Handler {
-	client, err := clerk.NewClient(secretKey)
-	if err != nil {
-		panic(err)
-	}
+	clerk.SetKey(secretKey)
 
 	return func(c *fiber.Ctx) error {
 		authHeader := c.Get("Authorization")
@@ -30,7 +26,9 @@ func ClerkAuth(secretKey string) fiber.Handler {
 			})
 		}
 
-		sessionClaims, err := client.VerifyToken(token)
+		claims, err := jwt.Verify(c.Context(), &jwt.VerifyParams{
+			Token: token,
+		})
 		if err != nil {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"error": "Invalid token",
@@ -38,12 +36,9 @@ func ClerkAuth(secretKey string) fiber.Handler {
 		}
 
 		// Store user info in context
-		userID, _ := sessionClaims.Get("sub")
-		orgID, _ := sessionClaims.Get("org_id")
-
-		c.Locals("userID", userID)
-		c.Locals("orgID", orgID)
-		c.Locals("sessionClaims", sessionClaims)
+		c.Locals("userID", claims.Subject)
+		c.Locals("orgID", claims.ActiveOrganizationID)
+		c.Locals("sessionClaims", claims)
 
 		return c.Next()
 	}
