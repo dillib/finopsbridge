@@ -8,7 +8,7 @@
     "routes": [
       {
         "src": "/api/(.*)",
-        "dest": "https://finopsbridge.fly.dev/$1"
+        "dest": "https://finopsbridge-api.fly.dev/api/$1"
       },
       {
         "src": "/(.*)",
