@@ -4,6 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { LayoutDashboard, Shield, Activity, Settings, Cloud } from "lucide-react"
+import { OrganizationSwitcher, UserButton } from "@clerk/nextjs"
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -17,9 +18,22 @@ export function Sidebar() {
   const pathname = usePathname()
 
   return (
-    <aside className="w-64 border-r bg-background p-6">
-      <div className="mb-8">
+    <aside className="w-64 border-r bg-background p-6 flex flex-col">
+      <div className="mb-4">
         <h2 className="text-xl font-bold">FinOpsBridge</h2>
+      </div>
+      <div className="mb-6">
+        <OrganizationSwitcher
+          createOrganizationMode="modal"
+          afterCreateOrganizationUrl="/dashboard"
+          afterSelectOrganizationUrl="/dashboard"
+          appearance={{
+            elements: {
+              rootBox: "w-full",
+              organizationSwitcherTrigger: "w-full justify-between"
+            }
+          }}
+        />
       </div>
       <nav className="space-y-2">
         {navItems.map((item) => {
@@ -42,6 +56,17 @@ export function Sidebar() {
           )
         })}
       </nav>
+      <div className="mt-auto pt-6 border-t">
+        <UserButton
+          afterSignOutUrl="/"
+          appearance={{
+            elements: {
+              rootBox: "w-full",
+              userButtonTrigger: "w-full justify-start"
+            }
+          }}
+        />
+      </div>
     </aside>
   )
 }
