@@ -1,7 +1,7 @@
 package database
 
 import (
-	"finopsbridge/api/internal/models_"
+	models "finopsbridge/api/internal/models_"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -18,14 +18,14 @@ func Initialize(databaseURL string) (*gorm.DB, error) {
 
 	// Auto-migrate models
 	if err := db.AutoMigrate(
-		&models_.User{},
-		&models_.Organization{},
-		&models_.CloudProvider{},
-		&models_.Policy{},
-		&models_.PolicyViolation{},
-		&models_.ActivityLog{},
-		&models_.WaitlistEntry{},
-		&models_.Webhook{},
+		&models.User{},
+		&models.Organization{},
+		&models.CloudProvider{},
+		&models.Policy{},
+		&models.PolicyViolation{},
+		&models.ActivityLog{},
+		&models.WaitlistEntry{},
+		&models.Webhook{},
 	); err != nil {
 		return nil, err
 	}

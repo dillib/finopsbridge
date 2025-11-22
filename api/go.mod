@@ -14,7 +14,7 @@ require (
 	github.com/aws/aws-sdk-go v1.55.5
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.16.0
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.8.0
-	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/consumption/armconsumption v1.3.0
+	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/consumption/armconsumption v1.2.0
 	cloud.google.com/go/billing v1.18.5
 	google.golang.org/api v0.210.0
 )

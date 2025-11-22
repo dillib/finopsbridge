@@ -5,8 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
-	"finopsbridge/api/internal/config_"
-	"finopsbridge/api/internal/models_"
+
+	config "finopsbridge/api/internal/config_"
+	models "finopsbridge/api/internal/models_"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -14,11 +15,11 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2"
 )
 
-func FetchAWSBilling(ctx context.Context, provider models_.CloudProvider, cfg *config_.Config) (map[string]interface{}, error) {
+func FetchAWSBilling(ctx context.Context, provider models.CloudProvider, cfg *config.Config) (map[string]interface{}, error) {
 	var credentials map[string]interface{}
 	json.Unmarshal([]byte(provider.Credentials), &credentials)
 
-	roleArn, ok := credentials["roleArn"].(string)
+	_, ok := credentials["roleArn"].(string)
 	if !ok {
 		return nil, fmt.Errorf("missing roleArn in credentials")
 	}
@@ -53,8 +54,8 @@ func FetchAWSBilling(ctx context.Context, provider models_.CloudProvider, cfg *c
 
 	var monthlySpend float64
 	if len(result.ResultsByTime) > 0 {
-		if amount, ok := result.ResultsByTime[0].Total["BlendedCost"].Amount; ok {
-			fmt.Sscanf(*amount, "%f", &monthlySpend)
+		if cost, exists := result.ResultsByTime[0].Total["BlendedCost"]; exists && cost.Amount != nil {
+			fmt.Sscanf(*cost.Amount, "%f", &monthlySpend)
 		}
 	}
 
@@ -64,7 +65,7 @@ func FetchAWSBilling(ctx context.Context, provider models_.CloudProvider, cfg *c
 	}, nil
 }
 
-func FetchAzureBilling(ctx context.Context, provider models_.CloudProvider, cfg *config_.Config) (map[string]interface{}, error) {
+func FetchAzureBilling(ctx context.Context, provider models.CloudProvider, cfg *config.Config) (map[string]interface{}, error) {
 	// Azure billing implementation
 	// This would use Azure Cost Management API
 	return map[string]interface{}{
@@ -73,7 +74,7 @@ func FetchAzureBilling(ctx context.Context, provider models_.CloudProvider, cfg 
 	}, nil
 }
 
-func FetchGCPBilling(ctx context.Context, provider models_.CloudProvider, cfg *config_.Config) (map[string]interface{}, error) {
+func FetchGCPBilling(ctx context.Context, provider models.CloudProvider, cfg *config.Config) (map[string]interface{}, error) {
 	// GCP billing implementation
 	// This would use GCP Billing API
 	return map[string]interface{}{
@@ -82,7 +83,7 @@ func FetchGCPBilling(ctx context.Context, provider models_.CloudProvider, cfg *c
 	}, nil
 }
 
-func StopNonEssentialResources(ctx context.Context, provider models_.CloudProvider, cfg *config_.Config) error {
+func StopNonEssentialResources(ctx context.Context, provider models.CloudProvider, cfg *config.Config) error {
 	switch provider.Type {
 	case "aws":
 		return stopAWSNonEssentialResources(ctx, provider, cfg)
@@ -94,7 +95,7 @@ func StopNonEssentialResources(ctx context.Context, provider models_.CloudProvid
 	return nil
 }
 
-func stopAWSNonEssentialResources(ctx context.Context, provider models_.CloudProvider, cfg *config_.Config) error {
+func stopAWSNonEssentialResources(ctx context.Context, provider models.CloudProvider, cfg *config.Config) error {
 	sess, err := session.NewSession(&aws.Config{
 		Region: aws.String(cfg.AWSRegion),
 	})
@@ -150,22 +151,22 @@ func stopAWSNonEssentialResources(ctx context.Context, provider models_.CloudPro
 	return nil
 }
 
-func stopAzureNonEssentialResources(ctx context.Context, provider models_.CloudProvider, cfg *config_.Config) error {
+func stopAzureNonEssentialResources(ctx context.Context, provider models.CloudProvider, cfg *config.Config) error {
 	// Azure implementation
 	return nil
 }
 
-func stopGCPNonEssentialResources(ctx context.Context, provider models_.CloudProvider, cfg *config_.Config) error {
+func stopGCPNonEssentialResources(ctx context.Context, provider models.CloudProvider, cfg *config.Config) error {
 	// GCP implementation
 	return nil
 }
 
-func TerminateOversizedInstances(ctx context.Context, provider models_.CloudProvider, cfg *config_.Config) error {
+func TerminateOversizedInstances(ctx context.Context, provider models.CloudProvider, cfg *config.Config) error {
 	// Similar to StopNonEssentialResources but terminates instead
 	return nil
 }
 
-func StopIdleResources(ctx context.Context, provider models_.CloudProvider, cfg *config_.Config) error {
+func StopIdleResources(ctx context.Context, provider models.CloudProvider, cfg *config.Config) error {
 	// Stop resources that have been idle for specified hours
 	return nil
 }
