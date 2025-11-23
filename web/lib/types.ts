@@ -1,18 +1,45 @@
+export type CloudProviderType = 'aws' | 'azure' | 'gcp' | 'oci' | 'ibm'
+
 export interface CloudProvider {
   id: string
-  type: 'aws' | 'azure' | 'gcp'
+  type: CloudProviderType
   name: string
   accountId?: string
   subscriptionId?: string
   projectId?: string
+  tenancyId?: string // OCI
+  compartmentId?: string // OCI
+  ibmAccountId?: string // IBM Cloud
   status: 'connected' | 'disconnected' | 'error'
   connectedAt?: string
   monthlySpend?: number
   credentials?: {
     roleArn?: string
     servicePrincipalId?: string
+    servicePrincipalSecret?: string
+    tenantId?: string
     serviceAccountKey?: string
+    ociUserId?: string // OCI
+    ociFingerprint?: string // OCI
+    ociPrivateKey?: string // OCI
+    ibmApiKey?: string // IBM Cloud
   }
+}
+
+export const CLOUD_PROVIDER_LABELS: Record<CloudProviderType, string> = {
+  aws: 'Amazon Web Services',
+  azure: 'Microsoft Azure',
+  gcp: 'Google Cloud Platform',
+  oci: 'Oracle Cloud Infrastructure',
+  ibm: 'IBM Cloud',
+}
+
+export const CLOUD_PROVIDER_SHORT_LABELS: Record<CloudProviderType, string> = {
+  aws: 'AWS',
+  azure: 'Azure',
+  gcp: 'GCP',
+  oci: 'OCI',
+  ibm: 'IBM',
 }
 
 export interface Policy {

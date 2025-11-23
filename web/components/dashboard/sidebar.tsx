@@ -3,13 +3,14 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { LayoutDashboard, Shield, Activity, Settings, Cloud, Building2 } from "lucide-react"
+import { LayoutDashboard, Shield, Activity, Settings, Cloud, Building2, AlertTriangle } from "lucide-react"
 import { OrganizationSwitcher, UserButton } from "@clerk/nextjs"
 import { Suspense } from "react"
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/dashboard/policies", label: "Policies", icon: Shield },
+  { href: "/dashboard/violations", label: "Violations", icon: AlertTriangle },
   { href: "/dashboard/clouds", label: "Cloud Providers", icon: Cloud },
   { href: "/dashboard/activity", label: "Activity Log", icon: Activity },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
