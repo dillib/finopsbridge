@@ -13,6 +13,10 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/costexplorer"
 	"github.com/aws/aws-sdk-go/service/ec2"
+
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/consumption/armconsumption"
 )
 
 func FetchAWSBilling(ctx context.Context, provider models.CloudProvider, cfg *config.Config) (map[string]interface{}, error) {
@@ -66,11 +70,83 @@ func FetchAWSBilling(ctx context.Context, provider models.CloudProvider, cfg *co
 }
 
 func FetchAzureBilling(ctx context.Context, provider models.CloudProvider, cfg *config.Config) (map[string]interface{}, error) {
-	// Azure billing implementation
-	// This would use Azure Cost Management API
+	var credentials map[string]interface{}
+	if err := json.Unmarshal([]byte(provider.Credentials), &credentials); err != nil {
+		return nil, fmt.Errorf("failed to parse credentials: %w", err)
+	}
+
+	tenantID, _ := credentials["tenantId"].(string)
+	clientID, _ := credentials["clientId"].(string)
+	clientSecret, _ := credentials["clientSecret"].(string)
+	subscriptionID := provider.SubscriptionID
+
+	if tenantID == "" || clientID == "" || clientSecret == "" || subscriptionID == "" {
+		return nil, fmt.Errorf("missing Azure credentials (tenantId, clientId, clientSecret) or subscriptionId")
+	}
+
+	// Create Azure credential using client secret
+	cred, err := azidentity.NewClientSecretCredential(tenantID, clientID, clientSecret, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Azure credential: %w", err)
+	}
+
+	// Create consumption client for cost data
+	consumptionClient, err := armconsumption.NewUsageDetailsClient(cred, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create consumption client: %w", err)
+	}
+
+	// Get current month's date range
+	now := time.Now()
+	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+
+	// Query scope for subscription-level costs
+	scope := fmt.Sprintf("/subscriptions/%s", subscriptionID)
+
+	// Build filter for current month
+	filter := fmt.Sprintf("properties/usageStart ge '%s' and properties/usageEnd le '%s'",
+		startOfMonth.Format("2006-01-02"),
+		now.Format("2006-01-02"))
+
+	var totalCost float64
+	currency := "USD"
+
+	// List usage details and aggregate costs
+	pager := consumptionClient.NewListPager(scope, &armconsumption.UsageDetailsClientListOptions{
+		Filter: &filter,
+	})
+
+	for pager.More() {
+		page, err := pager.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get usage details: %w", err)
+		}
+
+		for _, usage := range page.Value {
+			// Handle legacy usage detail format
+			if legacyUsage, ok := usage.(*armconsumption.LegacyUsageDetail); ok {
+				if legacyUsage.Properties != nil && legacyUsage.Properties.CostInBillingCurrency != nil {
+					totalCost += *legacyUsage.Properties.CostInBillingCurrency
+				}
+				if legacyUsage.Properties != nil && legacyUsage.Properties.BillingCurrency != nil {
+					currency = *legacyUsage.Properties.BillingCurrency
+				}
+			}
+			// Handle modern usage detail format
+			if modernUsage, ok := usage.(*armconsumption.ModernUsageDetail); ok {
+				if modernUsage.Properties != nil && modernUsage.Properties.CostInBillingCurrency != nil {
+					totalCost += *modernUsage.Properties.CostInBillingCurrency
+				}
+				if modernUsage.Properties != nil && modernUsage.Properties.BillingCurrencyCode != nil {
+					currency = *modernUsage.Properties.BillingCurrencyCode
+				}
+			}
+		}
+	}
+
 	return map[string]interface{}{
-		"monthlySpend": 0.0,
-		"currency":     "USD",
+		"monthlySpend": totalCost,
+		"currency":     currency,
 	}, nil
 }
 
@@ -152,8 +228,116 @@ func stopAWSNonEssentialResources(ctx context.Context, provider models.CloudProv
 }
 
 func stopAzureNonEssentialResources(ctx context.Context, provider models.CloudProvider, cfg *config.Config) error {
-	// Azure implementation
+	var credentials map[string]interface{}
+	if err := json.Unmarshal([]byte(provider.Credentials), &credentials); err != nil {
+		return fmt.Errorf("failed to parse credentials: %w", err)
+	}
+
+	tenantID, _ := credentials["tenantId"].(string)
+	clientID, _ := credentials["clientId"].(string)
+	clientSecret, _ := credentials["clientSecret"].(string)
+	subscriptionID := provider.SubscriptionID
+
+	if tenantID == "" || clientID == "" || clientSecret == "" || subscriptionID == "" {
+		return fmt.Errorf("missing Azure credentials or subscriptionId")
+	}
+
+	// Create Azure credential
+	cred, err := azidentity.NewClientSecretCredential(tenantID, clientID, clientSecret, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create Azure credential: %w", err)
+	}
+
+	// Create VM client
+	vmClient, err := armcompute.NewVirtualMachinesClient(subscriptionID, cred, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create VM client: %w", err)
+	}
+
+	// List all VMs in the subscription
+	pager := vmClient.NewListAllPager(nil)
+
+	count := 0
+	for pager.More() {
+		page, err := pager.NextPage(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to list VMs: %w", err)
+		}
+
+		for _, vm := range page.Value {
+			if count >= 5 {
+				// Limit to 5 VMs to avoid massive disruption
+				break
+			}
+
+			// Check if VM has Essential tag
+			hasEssential := false
+			if vm.Tags != nil {
+				if val, ok := vm.Tags["Essential"]; ok && val != nil && *val == "true" {
+					hasEssential = true
+				}
+			}
+
+			if !hasEssential && vm.Name != nil && vm.ID != nil {
+				// Extract resource group from VM ID
+				// VM ID format: /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Compute/virtualMachines/{name}
+				resourceGroup := extractResourceGroupFromID(*vm.ID)
+				if resourceGroup == "" {
+					fmt.Printf("Could not extract resource group from VM ID: %s\n", *vm.ID)
+					continue
+				}
+
+				// Deallocate (stop) the VM
+				poller, err := vmClient.BeginDeallocate(ctx, resourceGroup, *vm.Name, nil)
+				if err != nil {
+					fmt.Printf("Error stopping Azure VM %s: %v\n", *vm.Name, err)
+					continue
+				}
+
+				// Wait for the operation to complete (with timeout)
+				_, err = poller.PollUntilDone(ctx, nil)
+				if err != nil {
+					fmt.Printf("Error waiting for VM %s to stop: %v\n", *vm.Name, err)
+				} else {
+					fmt.Printf("Successfully stopped Azure VM: %s\n", *vm.Name)
+					count++
+				}
+			}
+		}
+	}
+
 	return nil
+}
+
+// extractResourceGroupFromID extracts the resource group name from an Azure resource ID
+func extractResourceGroupFromID(resourceID string) string {
+	// ID format: /subscriptions/{sub}/resourceGroups/{rg}/providers/...
+	parts := splitAzureResourceID(resourceID)
+	for i, part := range parts {
+		if part == "resourceGroups" && i+1 < len(parts) {
+			return parts[i+1]
+		}
+	}
+	return ""
+}
+
+func splitAzureResourceID(id string) []string {
+	var parts []string
+	current := ""
+	for _, char := range id {
+		if char == '/' {
+			if current != "" {
+				parts = append(parts, current)
+				current = ""
+			}
+		} else {
+			current += string(char)
+		}
+	}
+	if current != "" {
+		parts = append(parts, current)
+	}
+	return parts
 }
 
 func stopGCPNonEssentialResources(ctx context.Context, provider models.CloudProvider, cfg *config.Config) error {
