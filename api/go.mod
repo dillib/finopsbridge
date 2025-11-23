@@ -19,5 +19,8 @@ require (
 	cloud.google.com/go/billing v1.18.5
 	google.golang.org/api v0.210.0
 	github.com/oracle/oci-go-sdk/v65 v65.77.1
+	github.com/IBM/go-sdk-core/v5 v5.17.4
+	github.com/IBM/platform-services-go-sdk v0.62.11
+	github.com/IBM/vpc-go-sdk v0.56.0
 )
 

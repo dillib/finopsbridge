@@ -22,9 +22,13 @@ import (
 	compute "google.golang.org/api/compute/v1"
 	"google.golang.org/api/option"
 
-	"github.com/oracle/oci-go-sdk/v65/common"
-	"github.com/oracle/oci-go-sdk/v65/core"
+	ocicommon "github.com/oracle/oci-go-sdk/v65/common"
+	ocicore "github.com/oracle/oci-go-sdk/v65/core"
 	"github.com/oracle/oci-go-sdk/v65/usageapi"
+
+	ibmcore "github.com/IBM/go-sdk-core/v5/core"
+	"github.com/IBM/platform-services-go-sdk/usagereportsv4"
+	"github.com/IBM/vpc-go-sdk/vpcv1"
 )
 
 func FetchAWSBilling(ctx context.Context, provider models.CloudProvider, cfg *config.Config) (map[string]interface{}, error) {
@@ -283,7 +287,7 @@ func FetchOCIBilling(ctx context.Context, provider models.CloudProvider, cfg *co
 	}
 
 	// Create OCI configuration provider
-	configProvider := common.NewRawConfigurationProvider(
+	configProvider := ocicommon.NewRawConfigurationProvider(
 		tenancyOCID,
 		userOCID,
 		region,
@@ -309,11 +313,11 @@ func FetchOCIBilling(ctx context.Context, provider models.CloudProvider, cfg *co
 	request := usageapi.RequestSummarizedUsagesRequest{
 		RequestSummarizedUsagesDetails: usageapi.RequestSummarizedUsagesDetails{
 			TenantId:      &tenancyOCID,
-			TimeUsageStarted: &common.SDKTime{Time: startOfMonth},
-			TimeUsageEnded:   &common.SDKTime{Time: now},
+			TimeUsageStarted: &ocicommon.SDKTime{Time: startOfMonth},
+			TimeUsageEnded:   &ocicommon.SDKTime{Time: now},
 			Granularity:      granularity,
 			QueryType:        queryType,
-			CompartmentDepth: common.Float32(1),
+			CompartmentDepth: ocicommon.Float32(1),
 		},
 	}
 
@@ -345,6 +349,68 @@ func FetchOCIBilling(ctx context.Context, provider models.CloudProvider, cfg *co
 	}, nil
 }
 
+// FetchIBMBilling fetches billing data from IBM Cloud
+func FetchIBMBilling(ctx context.Context, provider models.CloudProvider, cfg *config.Config) (map[string]interface{}, error) {
+	var credentials map[string]interface{}
+	if err := json.Unmarshal([]byte(provider.Credentials), &credentials); err != nil {
+		return nil, fmt.Errorf("failed to parse credentials: %w", err)
+	}
+
+	apiKey, _ := credentials["apiKey"].(string)
+	accountID, _ := credentials["accountId"].(string)
+
+	if apiKey == "" || accountID == "" {
+		return nil, fmt.Errorf("missing IBM Cloud credentials (apiKey, accountId)")
+	}
+
+	// Create IAM authenticator
+	authenticator := &ibmcore.IamAuthenticator{
+		ApiKey: apiKey,
+	}
+
+	// Create Usage Reports client
+	usageReportsService, err := usagereportsv4.NewUsageReportsV4(&usagereportsv4.UsageReportsV4Options{
+		Authenticator: authenticator,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create IBM usage reports client: %w", err)
+	}
+
+	// Get current month
+	now := time.Now()
+	billingMonth := now.Format("2006-01")
+
+	// Get account usage
+	getAccountUsageOptions := usageReportsService.NewGetAccountUsageOptions(accountID, billingMonth)
+	accountUsage, _, err := usageReportsService.GetAccountUsage(getAccountUsageOptions)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get IBM account usage: %w", err)
+	}
+
+	var totalCost float64
+	currency := "USD"
+
+	// Aggregate costs from resources
+	if accountUsage.Resources != nil {
+		for _, resource := range accountUsage.Resources {
+			if resource.BillableCost != nil {
+				totalCost += *resource.BillableCost
+			}
+		}
+	}
+
+	if accountUsage.CurrencyCode != nil {
+		currency = *accountUsage.CurrencyCode
+	}
+
+	return map[string]interface{}{
+		"monthlySpend": totalCost,
+		"currency":     currency,
+		"accountId":    accountID,
+		"billingMonth": billingMonth,
+	}, nil
+}
+
 func StopNonEssentialResources(ctx context.Context, provider models.CloudProvider, cfg *config.Config) error {
 	switch provider.Type {
 	case "aws":
@@ -355,6 +421,8 @@ func StopNonEssentialResources(ctx context.Context, provider models.CloudProvide
 		return stopGCPNonEssentialResources(ctx, provider, cfg)
 	case "oci":
 		return stopOCINonEssentialResources(ctx, provider, cfg)
+	case "ibm":
+		return stopIBMNonEssentialResources(ctx, provider, cfg)
 	}
 	return nil
 }
@@ -674,7 +742,7 @@ func stopOCINonEssentialResources(ctx context.Context, provider models.CloudProv
 	}
 
 	// Create OCI configuration provider
-	configProvider := common.NewRawConfigurationProvider(
+	configProvider := ocicommon.NewRawConfigurationProvider(
 		tenancyOCID,
 		userOCID,
 		region,
@@ -684,14 +752,14 @@ func stopOCINonEssentialResources(ctx context.Context, provider models.CloudProv
 	)
 
 	// Create Compute client
-	computeClient, err := core.NewComputeClientWithConfigurationProvider(configProvider)
+	computeClient, err := ocicore.NewComputeClientWithConfigurationProvider(configProvider)
 	if err != nil {
 		return fmt.Errorf("failed to create OCI compute client: %w", err)
 	}
 
 	// List all running instances in the compartment
-	lifecycleState := core.InstanceLifecycleStateRunning
-	listRequest := core.ListInstancesRequest{
+	lifecycleState := ocicore.InstanceLifecycleStateRunning
+	listRequest := ocicore.ListInstancesRequest{
 		CompartmentId:  &compartmentOCID,
 		LifecycleState: lifecycleState,
 	}
@@ -719,9 +787,9 @@ func stopOCINonEssentialResources(ctx context.Context, provider models.CloudProv
 
 		if !hasEssential && instance.Id != nil {
 			// Stop the instance
-			stopRequest := core.InstanceActionRequest{
+			stopRequest := ocicore.InstanceActionRequest{
 				InstanceId: instance.Id,
-				Action:     core.InstanceActionActionStop,
+				Action:     ocicore.InstanceActionActionStop,
 			}
 
 			_, err := computeClient.InstanceAction(ctx, stopRequest)
@@ -763,7 +831,7 @@ func ListOCIInstances(ctx context.Context, provider models.CloudProvider, cfg *c
 		compartmentOCID = tenancyOCID
 	}
 
-	configProvider := common.NewRawConfigurationProvider(
+	configProvider := ocicommon.NewRawConfigurationProvider(
 		tenancyOCID,
 		userOCID,
 		region,
@@ -772,12 +840,12 @@ func ListOCIInstances(ctx context.Context, provider models.CloudProvider, cfg *c
 		nil,
 	)
 
-	computeClient, err := core.NewComputeClientWithConfigurationProvider(configProvider)
+	computeClient, err := ocicore.NewComputeClientWithConfigurationProvider(configProvider)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create OCI compute client: %w", err)
 	}
 
-	listRequest := core.ListInstancesRequest{
+	listRequest := ocicore.ListInstancesRequest{
 		CompartmentId: &compartmentOCID,
 	}
 
@@ -802,6 +870,148 @@ func ListOCIInstances(ctx context.Context, provider models.CloudProvider, cfg *c
 	}
 
 	return instances, nil
+}
+
+// stopIBMNonEssentialResources stops IBM Cloud virtual server instances without Essential tag
+func stopIBMNonEssentialResources(ctx context.Context, provider models.CloudProvider, cfg *config.Config) error {
+	var credentials map[string]interface{}
+	if err := json.Unmarshal([]byte(provider.Credentials), &credentials); err != nil {
+		return fmt.Errorf("failed to parse credentials: %w", err)
+	}
+
+	apiKey, _ := credentials["apiKey"].(string)
+	region, _ := credentials["region"].(string)
+
+	if apiKey == "" {
+		return fmt.Errorf("missing IBM Cloud credentials (apiKey)")
+	}
+
+	if region == "" {
+		region = "us-south" // Default region
+	}
+
+	// Create IAM authenticator
+	authenticator := &ibmcore.IamAuthenticator{
+		ApiKey: apiKey,
+	}
+
+	// Create VPC client
+	vpcService, err := vpcv1.NewVpcV1(&vpcv1.VpcV1Options{
+		Authenticator: authenticator,
+		URL:           fmt.Sprintf("https://%s.iaas.cloud.ibm.com/v1", region),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create IBM VPC client: %w", err)
+	}
+
+	// List all instances
+	listInstancesOptions := vpcService.NewListInstancesOptions()
+	instances, _, err := vpcService.ListInstances(listInstancesOptions)
+	if err != nil {
+		return fmt.Errorf("failed to list IBM instances: %w", err)
+	}
+
+	count := 0
+	maxStops := 5 // Limit to 5 instances to avoid massive disruption
+
+	for _, instance := range instances.Instances {
+		if count >= maxStops {
+			break
+		}
+
+		// Only process running instances
+		if instance.Status != nil && *instance.Status != "running" {
+			continue
+		}
+
+		// Check if instance has Essential tag in user tags
+		hasEssential := false
+		// IBM Cloud uses resource tags - check metadata or name pattern
+		if instance.Name != nil && containsEssential(*instance.Name) {
+			hasEssential = true
+		}
+
+		if !hasEssential && instance.ID != nil {
+			// Create stop action
+			stopAction := "stop"
+			createInstanceActionOptions := vpcService.NewCreateInstanceActionOptions(*instance.ID, stopAction)
+			_, _, err := vpcService.CreateInstanceAction(createInstanceActionOptions)
+			if err != nil {
+				fmt.Printf("Error stopping IBM instance %s: %v\n", *instance.Name, err)
+				continue
+			}
+			fmt.Printf("Successfully initiated stop for IBM instance: %s\n", *instance.Name)
+			count++
+		}
+	}
+
+	return nil
+}
+
+// containsEssential checks if a string contains "essential" (case-insensitive)
+func containsEssential(s string) bool {
+	lower := ""
+	for _, c := range s {
+		if c >= 'A' && c <= 'Z' {
+			lower += string(c + 32)
+		} else {
+			lower += string(c)
+		}
+	}
+	return len(lower) >= 9 && (lower == "essential" ||
+		(len(lower) > 9 && (lower[:9] == "essential" || lower[len(lower)-9:] == "essential")))
+}
+
+// ListIBMInstances lists all Virtual Server instances in IBM Cloud
+func ListIBMInstances(ctx context.Context, provider models.CloudProvider, cfg *config.Config) ([]map[string]interface{}, error) {
+	var credentials map[string]interface{}
+	if err := json.Unmarshal([]byte(provider.Credentials), &credentials); err != nil {
+		return nil, fmt.Errorf("failed to parse credentials: %w", err)
+	}
+
+	apiKey, _ := credentials["apiKey"].(string)
+	region, _ := credentials["region"].(string)
+
+	if apiKey == "" {
+		return nil, fmt.Errorf("missing IBM Cloud credentials (apiKey)")
+	}
+
+	if region == "" {
+		region = "us-south"
+	}
+
+	authenticator := &ibmcore.IamAuthenticator{
+		ApiKey: apiKey,
+	}
+
+	vpcService, err := vpcv1.NewVpcV1(&vpcv1.VpcV1Options{
+		Authenticator: authenticator,
+		URL:           fmt.Sprintf("https://%s.iaas.cloud.ibm.com/v1", region),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create IBM VPC client: %w", err)
+	}
+
+	listInstancesOptions := vpcService.NewListInstancesOptions()
+	instances, _, err := vpcService.ListInstances(listInstancesOptions)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list IBM instances: %w", err)
+	}
+
+	var result []map[string]interface{}
+	for _, instance := range instances.Instances {
+		result = append(result, map[string]interface{}{
+			"id":        instance.ID,
+			"name":      instance.Name,
+			"status":    instance.Status,
+			"profile":   instance.Profile,
+			"zone":      instance.Zone,
+			"vpc":       instance.VPC,
+			"createdAt": instance.CreatedAt,
+		})
+	}
+
+	return result, nil
 }
 
 func TerminateOversizedInstances(ctx context.Context, provider models.CloudProvider, cfg *config.Config) error {

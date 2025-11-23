@@ -86,6 +86,8 @@ func (w *EnforcementWorker) processProvider(ctx context.Context, provider models
 		billingData, err = cloud.FetchGCPBilling(ctx, provider, w.Config)
 	case "oci":
 		billingData, err = cloud.FetchOCIBilling(ctx, provider, w.Config)
+	case "ibm":
+		billingData, err = cloud.FetchIBMBilling(ctx, provider, w.Config)
 	default:
 		fmt.Printf("Unknown provider type: %s\n", provider.Type)
 		return
