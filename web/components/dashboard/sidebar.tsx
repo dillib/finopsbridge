@@ -3,8 +3,9 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { LayoutDashboard, Shield, Activity, Settings, Cloud } from "lucide-react"
+import { LayoutDashboard, Shield, Activity, Settings, Cloud, Building2 } from "lucide-react"
 import { OrganizationSwitcher, UserButton } from "@clerk/nextjs"
+import { Suspense } from "react"
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -13,6 +14,31 @@ const navItems = [
   { href: "/dashboard/activity", label: "Activity Log", icon: Activity },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ]
+
+function OrganizationSwitcherWrapper() {
+  return (
+    <OrganizationSwitcher
+      createOrganizationMode="modal"
+      afterCreateOrganizationUrl="/dashboard"
+      afterSelectOrganizationUrl="/dashboard"
+      appearance={{
+        elements: {
+          rootBox: "w-full",
+          organizationSwitcherTrigger: "w-full justify-between"
+        }
+      }}
+    />
+  )
+}
+
+function OrganizationSwitcherFallback() {
+  return (
+    <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+      <Building2 className="h-4 w-4" />
+      <span>Loading...</span>
+    </div>
+  )
+}
 
 export function Sidebar() {
   const pathname = usePathname()
@@ -23,17 +49,9 @@ export function Sidebar() {
         <h2 className="text-xl font-bold">FinOpsBridge</h2>
       </div>
       <div className="mb-6">
-        <OrganizationSwitcher
-          createOrganizationMode="modal"
-          afterCreateOrganizationUrl="/dashboard"
-          afterSelectOrganizationUrl="/dashboard"
-          appearance={{
-            elements: {
-              rootBox: "w-full",
-              organizationSwitcherTrigger: "w-full justify-between"
-            }
-          }}
-        />
+        <Suspense fallback={<OrganizationSwitcherFallback />}>
+          <OrganizationSwitcherWrapper />
+        </Suspense>
       </div>
       <nav className="space-y-2">
         {navItems.map((item) => {
