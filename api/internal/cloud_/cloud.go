@@ -21,6 +21,10 @@ import (
 	"google.golang.org/api/cloudbilling/v1"
 	compute "google.golang.org/api/compute/v1"
 	"google.golang.org/api/option"
+
+	"github.com/oracle/oci-go-sdk/v65/common"
+	"github.com/oracle/oci-go-sdk/v65/core"
+	"github.com/oracle/oci-go-sdk/v65/usageapi"
 )
 
 func FetchAWSBilling(ctx context.Context, provider models.CloudProvider, cfg *config.Config) (map[string]interface{}, error) {
@@ -251,6 +255,96 @@ func FetchGCPBillingFromBigQuery(ctx context.Context, provider models.CloudProvi
 	}, nil
 }
 
+// FetchOCIBilling fetches billing data from Oracle Cloud Infrastructure
+func FetchOCIBilling(ctx context.Context, provider models.CloudProvider, cfg *config.Config) (map[string]interface{}, error) {
+	var credentials map[string]interface{}
+	if err := json.Unmarshal([]byte(provider.Credentials), &credentials); err != nil {
+		return nil, fmt.Errorf("failed to parse credentials: %w", err)
+	}
+
+	tenancyOCID, _ := credentials["tenancyOcid"].(string)
+	userOCID, _ := credentials["userOcid"].(string)
+	fingerprint, _ := credentials["fingerprint"].(string)
+	privateKey, _ := credentials["privateKey"].(string)
+	region, _ := credentials["region"].(string)
+	compartmentOCID, _ := credentials["compartmentOcid"].(string)
+
+	if tenancyOCID == "" || userOCID == "" || fingerprint == "" || privateKey == "" {
+		return nil, fmt.Errorf("missing OCI credentials (tenancyOcid, userOcid, fingerprint, privateKey)")
+	}
+
+	if region == "" {
+		region = "us-ashburn-1" // Default region
+	}
+
+	// Use compartment OCID if provided, otherwise use tenancy OCID
+	if compartmentOCID == "" {
+		compartmentOCID = tenancyOCID
+	}
+
+	// Create OCI configuration provider
+	configProvider := common.NewRawConfigurationProvider(
+		tenancyOCID,
+		userOCID,
+		region,
+		fingerprint,
+		privateKey,
+		nil, // passphrase
+	)
+
+	// Create Usage API client for cost data
+	usageClient, err := usageapi.NewUsageapiClientWithConfigurationProvider(configProvider)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create OCI usage client: %w", err)
+	}
+
+	// Get current month's date range
+	now := time.Now()
+	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+
+	// Create request for usage summary
+	granularity := usageapi.RequestSummarizedUsagesDetailsGranularityMonthly
+	queryType := usageapi.RequestSummarizedUsagesDetailsQueryTypeCost
+
+	request := usageapi.RequestSummarizedUsagesRequest{
+		RequestSummarizedUsagesDetails: usageapi.RequestSummarizedUsagesDetails{
+			TenantId:      &tenancyOCID,
+			TimeUsageStarted: &common.SDKTime{Time: startOfMonth},
+			TimeUsageEnded:   &common.SDKTime{Time: now},
+			Granularity:      granularity,
+			QueryType:        queryType,
+			CompartmentDepth: common.Float32(1),
+		},
+	}
+
+	// Execute the request
+	response, err := usageClient.RequestSummarizedUsages(ctx, request)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get OCI usage data: %w", err)
+	}
+
+	var totalCost float64
+	currency := "USD"
+
+	// Aggregate costs from response
+	for _, item := range response.Items {
+		if item.ComputedAmount != nil {
+			totalCost += *item.ComputedAmount
+		}
+		if item.Currency != nil {
+			currency = *item.Currency
+		}
+	}
+
+	return map[string]interface{}{
+		"monthlySpend":    totalCost,
+		"currency":        currency,
+		"tenancyOcid":     tenancyOCID,
+		"compartmentOcid": compartmentOCID,
+		"region":          region,
+	}, nil
+}
+
 func StopNonEssentialResources(ctx context.Context, provider models.CloudProvider, cfg *config.Config) error {
 	switch provider.Type {
 	case "aws":
@@ -259,6 +353,8 @@ func StopNonEssentialResources(ctx context.Context, provider models.CloudProvide
 		return stopAzureNonEssentialResources(ctx, provider, cfg)
 	case "gcp":
 		return stopGCPNonEssentialResources(ctx, provider, cfg)
+	case "oci":
+		return stopOCINonEssentialResources(ctx, provider, cfg)
 	}
 	return nil
 }
@@ -546,6 +642,163 @@ func ListGCPInstances(ctx context.Context, provider models.CloudProvider, cfg *c
 		return nil
 	}); err != nil {
 		return nil, fmt.Errorf("failed to list instances: %w", err)
+	}
+
+	return instances, nil
+}
+
+// stopOCINonEssentialResources stops OCI compute instances without Essential freeform tag
+func stopOCINonEssentialResources(ctx context.Context, provider models.CloudProvider, cfg *config.Config) error {
+	var credentials map[string]interface{}
+	if err := json.Unmarshal([]byte(provider.Credentials), &credentials); err != nil {
+		return fmt.Errorf("failed to parse credentials: %w", err)
+	}
+
+	tenancyOCID, _ := credentials["tenancyOcid"].(string)
+	userOCID, _ := credentials["userOcid"].(string)
+	fingerprint, _ := credentials["fingerprint"].(string)
+	privateKey, _ := credentials["privateKey"].(string)
+	region, _ := credentials["region"].(string)
+	compartmentOCID, _ := credentials["compartmentOcid"].(string)
+
+	if tenancyOCID == "" || userOCID == "" || fingerprint == "" || privateKey == "" {
+		return fmt.Errorf("missing OCI credentials")
+	}
+
+	if region == "" {
+		region = "us-ashburn-1"
+	}
+
+	if compartmentOCID == "" {
+		compartmentOCID = tenancyOCID
+	}
+
+	// Create OCI configuration provider
+	configProvider := common.NewRawConfigurationProvider(
+		tenancyOCID,
+		userOCID,
+		region,
+		fingerprint,
+		privateKey,
+		nil,
+	)
+
+	// Create Compute client
+	computeClient, err := core.NewComputeClientWithConfigurationProvider(configProvider)
+	if err != nil {
+		return fmt.Errorf("failed to create OCI compute client: %w", err)
+	}
+
+	// List all running instances in the compartment
+	lifecycleState := core.InstanceLifecycleStateRunning
+	listRequest := core.ListInstancesRequest{
+		CompartmentId:  &compartmentOCID,
+		LifecycleState: lifecycleState,
+	}
+
+	response, err := computeClient.ListInstances(ctx, listRequest)
+	if err != nil {
+		return fmt.Errorf("failed to list OCI instances: %w", err)
+	}
+
+	count := 0
+	maxStops := 5 // Limit to 5 instances to avoid massive disruption
+
+	for _, instance := range response.Items {
+		if count >= maxStops {
+			break
+		}
+
+		// Check if instance has Essential freeform tag
+		hasEssential := false
+		if instance.FreeformTags != nil {
+			if val, ok := instance.FreeformTags["Essential"]; ok && val == "true" {
+				hasEssential = true
+			}
+		}
+
+		if !hasEssential && instance.Id != nil {
+			// Stop the instance
+			stopRequest := core.InstanceActionRequest{
+				InstanceId: instance.Id,
+				Action:     core.InstanceActionActionStop,
+			}
+
+			_, err := computeClient.InstanceAction(ctx, stopRequest)
+			if err != nil {
+				fmt.Printf("Error stopping OCI instance %s: %v\n", *instance.DisplayName, err)
+				continue
+			}
+			fmt.Printf("Successfully initiated stop for OCI instance: %s\n", *instance.DisplayName)
+			count++
+		}
+	}
+
+	return nil
+}
+
+// ListOCIInstances lists all Compute instances in an OCI compartment
+func ListOCIInstances(ctx context.Context, provider models.CloudProvider, cfg *config.Config) ([]map[string]interface{}, error) {
+	var credentials map[string]interface{}
+	if err := json.Unmarshal([]byte(provider.Credentials), &credentials); err != nil {
+		return nil, fmt.Errorf("failed to parse credentials: %w", err)
+	}
+
+	tenancyOCID, _ := credentials["tenancyOcid"].(string)
+	userOCID, _ := credentials["userOcid"].(string)
+	fingerprint, _ := credentials["fingerprint"].(string)
+	privateKey, _ := credentials["privateKey"].(string)
+	region, _ := credentials["region"].(string)
+	compartmentOCID, _ := credentials["compartmentOcid"].(string)
+
+	if tenancyOCID == "" || userOCID == "" || fingerprint == "" || privateKey == "" {
+		return nil, fmt.Errorf("missing OCI credentials")
+	}
+
+	if region == "" {
+		region = "us-ashburn-1"
+	}
+
+	if compartmentOCID == "" {
+		compartmentOCID = tenancyOCID
+	}
+
+	configProvider := common.NewRawConfigurationProvider(
+		tenancyOCID,
+		userOCID,
+		region,
+		fingerprint,
+		privateKey,
+		nil,
+	)
+
+	computeClient, err := core.NewComputeClientWithConfigurationProvider(configProvider)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create OCI compute client: %w", err)
+	}
+
+	listRequest := core.ListInstancesRequest{
+		CompartmentId: &compartmentOCID,
+	}
+
+	response, err := computeClient.ListInstances(ctx, listRequest)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list OCI instances: %w", err)
+	}
+
+	var instances []map[string]interface{}
+	for _, instance := range response.Items {
+		instances = append(instances, map[string]interface{}{
+			"id":             instance.Id,
+			"name":           instance.DisplayName,
+			"compartmentId":  instance.CompartmentId,
+			"availabilityDomain": instance.AvailabilityDomain,
+			"shape":          instance.Shape,
+			"lifecycleState": instance.LifecycleState,
+			"freeformTags":   instance.FreeformTags,
+			"definedTags":    instance.DefinedTags,
+			"createdAt":      instance.TimeCreated,
+		})
 	}
 
 	return instances, nil

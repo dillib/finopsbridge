@@ -80,10 +80,12 @@ func (w *EnforcementWorker) processProvider(ctx context.Context, provider models
 	switch provider.Type {
 	case "aws":
 		billingData, err = cloud.FetchAWSBilling(ctx, provider, w.Config)
-		case "azure":
+	case "azure":
 		billingData, err = cloud.FetchAzureBilling(ctx, provider, w.Config)
-		case "gcp":
+	case "gcp":
 		billingData, err = cloud.FetchGCPBilling(ctx, provider, w.Config)
+	case "oci":
+		billingData, err = cloud.FetchOCIBilling(ctx, provider, w.Config)
 	default:
 		fmt.Printf("Unknown provider type: %s\n", provider.Type)
 		return

@@ -18,5 +18,6 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5 v5.7.0
 	cloud.google.com/go/billing v1.18.5
 	google.golang.org/api v0.210.0
+	github.com/oracle/oci-go-sdk/v65 v65.77.1
 )
 
