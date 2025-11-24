@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(npm audit:*)",
+      "Bash(npm i:*)",
+      "Bash(powershell -Command \"cd ''c:\\Users\\dilli\\OneDrive\\Documents\\finopsbridge\\api''; & ''C:\\Users\\dilli\\.fly\\bin\\flyctl.exe'' deploy\")",
+      "Bash(powershell -Command \"& ''C:\\Users\\dilli\\.fly\\bin\\flyctl.exe'' logs --app finopsbridge-api --no-tail\")",
+      "Bash(npx vercel --prod)",
+      "Bash(npx vercel logs:*)",
+      "Bash(curl:*)",
+      "Bash(go build:*)",
+      "Bash(npm run build:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

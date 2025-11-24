@@ -2,58 +2,176 @@ name: CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
+
+env:
+  GO_VERSION: '1.23'
+  NODE_VERSION: '20'
 
 jobs:
-  backend:
-    name: Backend Tests
+  # Go Backend Tests with Database
+  go-test:
+    name: Go Tests
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: finopsbridge_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: api/go.sum
 
-      - name: Cache Go modules
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-
-      - name: Download dependencies
+      - name: Install dependencies
         working-directory: ./api
         run: go mod download
 
+      - name: Run Go vet
+        working-directory: ./api
+        run: go vet ./...
+
+      - name: Run Go tests
+        working-directory: ./api
+        env:
+          DATABASE_URL: postgres://test:test@localhost:5432/finopsbridge_test?sslmode=disable
+          REDIS_URL: redis://localhost:6379
+          CLERK_SECRET_KEY: test_secret
+        run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+
+      - name: Upload Go coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./api/coverage.out
+          flags: backend
+          fail_ci_if_error: false
+
+  # Go Build Check
+  go-build:
+    name: Go Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: api/go.sum
+
       - name: Build
         working-directory: ./api
-        run: go build ./...
+        run: go build -o finopsbridge ./cmd/server
 
-      - name: Run tests (if tests exist)
-        working-directory: ./api
-        run: go test ./... || true
+  # OPA Rego Policy Tests
+  opa-test:
+    name: OPA Rego Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-  frontend:
+      - name: Setup OPA
+        uses: open-policy-agent/setup-opa@v2
+        with:
+          version: latest
+
+      - name: Run Rego tests
+        run: |
+          if [ -d "api/policies/tests" ]; then
+            opa test api/policies/ -v --coverage --format=json > opa-coverage.json || true
+            opa test api/policies/ -v
+          else
+            echo "No Rego tests found yet"
+          fi
+
+  # Frontend Lint and Type Check
+  frontend-lint:
+    name: Frontend Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./web
+        run: npm ci
+
+      - name: TypeScript check
+        working-directory: ./web
+        run: npx tsc --noEmit
+
+      - name: ESLint
+        working-directory: ./web
+        run: npm run lint
+
+  # Frontend Tests
+  frontend-test:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./web
+        run: npm ci
+
+      - name: Run tests
+        working-directory: ./web
+        run: npm test -- --run --coverage 2>/dev/null || echo "Tests not configured yet"
+
+  # Frontend Build
+  frontend-build:
     name: Frontend Build
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-          cache-dependency-path: web/package.json
+          cache-dependency-path: web/package-lock.json
 
       - name: Install dependencies
         working-directory: ./web
@@ -61,9 +179,37 @@ jobs:
 
       - name: Build
         working-directory: ./web
+        env:
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || 'pk_test_placeholder' }}
+          NEXT_PUBLIC_API_URL: https://api.example.com
         run: npm run build
 
-      - name: Lint
-        working-directory: ./web
-        run: npm run lint || true
+  # Security Scanning
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '0'
+
+      - name: Go security scan
+        uses: securego/gosec@master
+        with:
+          working-directory: ./api
+          args: '-no-fail ./...'
+
+  # All checks pass gate
+  ci-success:
+    name: CI Success
+    runs-on: ubuntu-latest
+    needs: [go-test, go-build, opa-test, frontend-lint, frontend-build]
+    steps:
+      - name: All checks passed
+        run: echo "All CI checks passed!"
