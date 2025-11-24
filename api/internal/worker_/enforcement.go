@@ -193,17 +193,45 @@ func (w *EnforcementWorker) handleViolation(ctx context.Context, policy models.P
 func (w *EnforcementWorker) remediate(ctx context.Context, policy models.Policy, provider models.CloudProvider, violation models.PolicyViolation) {
 	fmt.Printf("Attempting remediation for policy: %s\n", policy.Name)
 
+	// Parse policy config to get remediation parameters
+	var policyConfig map[string]interface{}
+	if err := json.Unmarshal([]byte(policy.Config), &policyConfig); err != nil {
+		fmt.Printf("Error parsing policy config: %v\n", err)
+		policyConfig = make(map[string]interface{})
+	}
+
 	var err error
 	switch policy.Type {
 	case "max_spend":
 		// Stop non-essential resources
 		err = cloud.StopNonEssentialResources(ctx, provider, w.Config)
-		case "block_instance_type":
+	case "block_instance_type":
 		// Terminate oversized instances
-		err = cloud.TerminateOversizedInstances(ctx, provider, w.Config)
-		case "auto_stop_idle":
+		// Extract maxSize from config, default to 4 (large) if not specified
+		maxSizeLevel := 4
+		if maxSize, ok := policyConfig["maxSize"].(string); ok {
+			switch maxSize {
+			case "small":
+				maxSizeLevel = 2
+			case "medium":
+				maxSizeLevel = 3
+			case "large":
+				maxSizeLevel = 4
+			case "xlarge":
+				maxSizeLevel = 5
+			}
+		}
+		err = cloud.TerminateOversizedInstances(ctx, provider, w.Config, maxSizeLevel)
+	case "auto_stop_idle":
 		// Stop idle resources
-		err = cloud.StopIdleResources(ctx, provider, w.Config)
+		// Extract idleHours from config, default to 24 if not specified
+		idleHours := 24.0
+		if hours, ok := policyConfig["idleHours"].(float64); ok {
+			idleHours = hours
+		} else if hours, ok := policyConfig["idleHours"].(int); ok {
+			idleHours = float64(hours)
+		}
+		err = cloud.StopIdleResources(ctx, provider, w.Config, idleHours)
 	case "require_tags":
 		// Tag resources (no remediation, just notification)
 		return
@@ -225,7 +253,7 @@ func (w *EnforcementWorker) remediate(ctx context.Context, policy models.Policy,
 		OrganizationID: policy.OrganizationID,
 		Type:           "remediation",
 		Message:        fmt.Sprintf("Policy '%s' violation remediated", policy.Name),
-		Metadata:        fmt.Sprintf(`{"policyId":"%s","violationId":"%s"}`, policy.ID, violation.ID),
+		Metadata:       fmt.Sprintf(`{"policyId":"%s","violationId":"%s"}`, policy.ID, violation.ID),
 	}
 	w.DB.Create(&activityLog)
 }

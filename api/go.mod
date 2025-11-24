@@ -17,6 +17,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/consumption/armconsumption v1.2.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5 v5.7.0
 	cloud.google.com/go/billing v1.18.5
+	cloud.google.com/go/bigquery v1.64.0
 	google.golang.org/api v0.210.0
 	github.com/oracle/oci-go-sdk/v65 v65.77.1
 	github.com/IBM/go-sdk-core/v5 v5.17.4

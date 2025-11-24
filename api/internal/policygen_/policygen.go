@@ -28,7 +28,7 @@ func generateMaxSpendPolicy(config map[string]interface{}) string {
 		accountFilter = fmt.Sprintf(`input.account_id == "%s" &&`, accountId)
 	}
 
-	return fmt.Sprintf(`package finopsbridge.policies.max_spend
+	return fmt.Sprintf(`package finopsbridge.policies
 
 default allow = false
 
@@ -40,8 +40,13 @@ allow {
 violation {
 	%s
 	input.monthly_spend > %v
-	msg := sprintf("Monthly spend $%v exceeds limit of $%v", [input.monthly_spend, %v])
-}`, accountFilter, maxAmount, accountFilter, maxAmount, maxAmount, maxAmount, maxAmount)
+}
+
+msg = m {
+	%s
+	input.monthly_spend > %v
+	m := sprintf("Monthly spend $%%v exceeds limit of $%%v", [input.monthly_spend, %v])
+}`, accountFilter, maxAmount, accountFilter, maxAmount, accountFilter, maxAmount, maxAmount)
 }
 
 func generateBlockInstanceTypePolicy(config map[string]interface{}) string {
@@ -56,7 +61,7 @@ func generateBlockInstanceTypePolicy(config map[string]interface{}) string {
 	
 	maxSizeValue := sizeMap[maxSize.(string)]
 
-	return fmt.Sprintf(`package finopsbridge.policies.block_instance_type
+	return fmt.Sprintf(`package finopsbridge.policies
 
 default allow = true
 
@@ -66,21 +71,33 @@ allow {
 
 violation {
 	input.instance_size > %d
-	msg := sprintf("Instance size exceeds maximum allowed size: %s", [input.instance_size])
-}`, maxSizeValue, maxSizeValue, maxSize)
+}
+
+msg = m {
+	input.instance_size > %d
+	m := sprintf("Instance size %%v exceeds maximum allowed size: %s", [input.instance_size])
+}`, maxSizeValue, maxSizeValue, maxSizeValue, maxSize)
 }
 
 func generateAutoStopIdlePolicy(config map[string]interface{}) string {
 	idleHours := config["idleHours"]
 
-	return fmt.Sprintf(`package finopsbridge.policies.auto_stop_idle
+	return fmt.Sprintf(`package finopsbridge.policies
 
 default allow = true
 
+allow {
+	input.idle_hours < %v
+}
+
 violation {
 	input.idle_hours >= %v
-	msg := sprintf("Resource has been idle for %v hours, should be stopped", [input.idle_hours])
-}`, idleHours, idleHours)
+}
+
+msg = m {
+	input.idle_hours >= %v
+	m := sprintf("Resource has been idle for %%v hours, should be stopped", [input.idle_hours])
+}`, idleHours, idleHours, idleHours)
 }
 
 func generateRequireTagsPolicy(config map[string]interface{}) string {
@@ -96,16 +113,25 @@ func generateRequireTagsPolicy(config map[string]interface{}) string {
 		}
 	}
 
-	return fmt.Sprintf(`package finopsbridge.policies.require_tags
+	return fmt.Sprintf(`package finopsbridge.policies
 
 default allow = true
+
+required_tags = [%s]
+
+allow {
+	count([tag | tag := required_tags[_]; not input.tags[tag]]) == 0
+}
 
 violation {
 	missing_tag := required_tags[_]
 	not input.tags[missing_tag]
-	msg := sprintf("Missing required tag: %s", [missing_tag])
 }
 
-required_tags = [%s]`, tagsList)
+msg = m {
+	missing_tag := required_tags[_]
+	not input.tags[missing_tag]
+	m := sprintf("Missing required tag: %%s", [missing_tag])
+}`, tagsList)
 }
 
