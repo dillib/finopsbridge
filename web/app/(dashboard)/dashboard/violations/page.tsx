@@ -56,7 +56,7 @@ export default function ViolationsPage() {
       if (!token) return
 
       const data = await apiRequestWithAuth("/api/violations", token)
-      setViolations(data || [])
+      setViolations(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error("Error fetching violations:", error)
       toast({
