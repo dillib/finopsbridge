@@ -161,6 +161,93 @@ type PolicyAdoptionMetrics struct {
 	UpdatedAt           time.Time
 }
 
+// AI & ML Cost Tracking Models
+
+type AIWorkload struct {
+	ID             string `gorm:"primaryKey"`
+	OrganizationID string `gorm:"index;not null"`
+	CloudProvider  string `gorm:"not null"` // aws, azure, gcp, openai, anthropic, google
+	WorkloadType   string `gorm:"not null"` // training, inference, fine_tuning, prompt_engineering, rag
+	Name           string `gorm:"not null"`
+	ModelName      string // e.g., gpt-4, claude-3-opus, llama-2-70b
+	Environment    string `gorm:"default:development"` // development, staging, production
+	Status         string `gorm:"default:active"` // active, paused, completed
+	TotalCost      float64
+	StartedAt      time.Time
+	CompletedAt    *time.Time
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	Metadata       string `gorm:"type:text"` // JSON: project, team, use_case, etc.
+}
+
+type TokenUsage struct {
+	ID             string `gorm:"primaryKey"`
+	OrganizationID string `gorm:"index;not null"`
+	AIWorkloadID   string `gorm:"index"` // Optional: link to specific workload
+	Provider       string `gorm:"not null"` // openai, anthropic, azure_openai, bedrock, vertex_ai
+	ModelName      string `gorm:"not null"` // gpt-4-turbo, claude-3-opus, etc.
+	Endpoint       string // API endpoint or feature using tokens
+	InputTokens    int64
+	OutputTokens   int64
+	TotalTokens    int64
+	Cost           float64
+	CachedTokens   int64 // Cached prompt tokens (cost savings)
+	RequestCount   int   // Number of API calls
+	Timestamp      time.Time
+	CreatedAt      time.Time
+	Metadata       string `gorm:"type:text"` // JSON: user_id, feature, prompt_template, etc.
+}
+
+type GPUMetrics struct {
+	ID             string `gorm:"primaryKey"`
+	OrganizationID string `gorm:"index;not null"`
+	AIWorkloadID   string `gorm:"index"` // Optional: link to specific workload
+	CloudProvider  string `gorm:"not null"` // aws, azure, gcp
+	InstanceType   string `gorm:"not null"` // p3.2xlarge, Standard_NC6s_v3, a2-highgpu-1g
+	InstanceID     string `gorm:"not null"`
+	GPUType        string // A100, V100, T4, H100
+	GPUCount       int
+	Utilization    float64 // 0.0 to 100.0
+	MemoryUsed     float64 // GB
+	MemoryTotal    float64 // GB
+	HourlyCost     float64
+	Status         string `gorm:"default:running"` // running, idle, stopped
+	Timestamp      time.Time
+	CreatedAt      time.Time
+	Metadata       string `gorm:"type:text"` // JSON: region, availability_zone, etc.
+}
+
+type AIBudget struct {
+	ID               string `gorm:"primaryKey"`
+	OrganizationID   string `gorm:"index;not null"`
+	Name             string `gorm:"not null"`
+	BudgetType       string `gorm:"not null"` // token_limit, cost_limit, gpu_hours
+	Period           string `gorm:"default:monthly"` // daily, weekly, monthly
+	LimitValue       float64 // tokens or dollars or hours
+	CurrentUsage     float64
+	AlertThresholds  string `gorm:"type:text"` // JSON: [50, 75, 90, 100]
+	Scope            string `gorm:"type:text"` // JSON: filter by workload_type, model, team, etc.
+	Enabled          bool   `gorm:"default:true"`
+	LastResetAt      time.Time
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+}
+
+type AIModelCatalog struct {
+	ID                string `gorm:"primaryKey"`
+	Provider          string `gorm:"not null;index"` // openai, anthropic, azure, aws, gcp
+	ModelName         string `gorm:"not null"`
+	ModelVersion      string
+	InputPricePerMToken  float64 // Price per million tokens
+	OutputPricePerMToken float64
+	ContextWindow     int // Maximum context length
+	Category          string // llm, embedding, fine_tuning, image_generation
+	Capabilities      string `gorm:"type:text"` // JSON: ["text", "vision", "function_calling"]
+	IsAvailable       bool   `gorm:"default:true"`
+	UpdatedAt         time.Time
+	CreatedAt         time.Time
+}
+
 // BeforeCreate hooks
 func (u *User) BeforeCreate(tx *gorm.DB) error {
 	if u.ID == "" {
@@ -242,6 +329,41 @@ func (pr *PolicyRecommendation) BeforeCreate(tx *gorm.DB) error {
 func (pam *PolicyAdoptionMetrics) BeforeCreate(tx *gorm.DB) error {
 	if pam.ID == "" {
 		pam.ID = generateID()
+	}
+	return nil
+}
+
+func (aw *AIWorkload) BeforeCreate(tx *gorm.DB) error {
+	if aw.ID == "" {
+		aw.ID = generateID()
+	}
+	return nil
+}
+
+func (tu *TokenUsage) BeforeCreate(tx *gorm.DB) error {
+	if tu.ID == "" {
+		tu.ID = generateID()
+	}
+	return nil
+}
+
+func (gm *GPUMetrics) BeforeCreate(tx *gorm.DB) error {
+	if gm.ID == "" {
+		gm.ID = generateID()
+	}
+	return nil
+}
+
+func (ab *AIBudget) BeforeCreate(tx *gorm.DB) error {
+	if ab.ID == "" {
+		ab.ID = generateID()
+	}
+	return nil
+}
+
+func (amc *AIModelCatalog) BeforeCreate(tx *gorm.DB) error {
+	if amc.ID == "" {
+		amc.ID = generateID()
 	}
 	return nil
 }

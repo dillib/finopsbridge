@@ -30,6 +30,11 @@ func Initialize(databaseURL string) (*gorm.DB, error) {
 		&models.PolicyTemplate{},
 		&models.PolicyRecommendation{},
 		&models.PolicyAdoptionMetrics{},
+		&models.AIWorkload{},
+		&models.TokenUsage{},
+		&models.GPUMetrics{},
+		&models.AIBudget{},
+		&models.AIModelCatalog{},
 	); err != nil {
 		return nil, err
 	}

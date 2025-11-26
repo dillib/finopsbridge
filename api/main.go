@@ -109,6 +109,17 @@ func main() {
 	api.Post("/recommendations/:id/accept", h.AcceptRecommendation)
 	api.Post("/recommendations/:id/reject", h.RejectRecommendation)
 
+	// AI Cost Tracking
+	api.Post("/ai/token-usage", h.TrackTokenUsage)
+	api.Get("/ai/token-usage", h.GetTokenUsage)
+	api.Post("/ai/gpu-metrics", h.TrackGPUMetrics)
+	api.Get("/ai/gpu-metrics", h.GetGPUMetrics)
+	api.Post("/ai/workloads", h.CreateAIWorkload)
+	api.Get("/ai/workloads", h.ListAIWorkloads)
+	api.Post("/ai/budgets", h.CreateAIBudget)
+	api.Get("/ai/budgets", h.ListAIBudgets)
+	api.Get("/ai/dashboard", h.GetAIDashboard)
+
 	// Start enforcement worker
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
