@@ -100,3 +100,57 @@ export interface WaitlistEntry {
   createdAt: string
 }
 
+export interface PolicyCategory {
+  id: string
+  name: string
+  description: string
+  icon: string
+  sortOrder: number
+  createdAt: string
+  updatedAt: string
+  templates?: PolicyTemplate[]
+}
+
+export interface PolicyTemplate {
+  id: string
+  categoryId: string
+  name: string
+  description: string
+  policyType: string
+  defaultConfig: string // JSON
+  regoTemplate: string
+  estimatedSavings: string
+  difficulty: 'easy' | 'medium' | 'hard'
+  requiredPermissions: string // JSON array
+  tags: string // JSON array
+  cloudProviders: string // JSON array
+  complianceFrameworks: string // JSON array
+  businessImpact: string
+  usageCount: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface PolicyRecommendation {
+  id: string
+  organizationId: string
+  policyTemplateId: string
+  status: 'pending' | 'accepted' | 'rejected' | 'deployed'
+  confidenceScore: number
+  estimatedMonthlySavings: number
+  recommendationReason: string
+  detectedIssues: string // JSON array
+  suggestedConfig: string // JSON
+  priority: 'low' | 'medium' | 'high' | 'critical'
+  createdAt: string
+  updatedAt: string
+  deployedAt?: string
+  rejectedAt?: string
+  rejectionReason?: string
+  template?: PolicyTemplate
+}
+
+export interface RecommendationWithTemplate extends PolicyRecommendation {
+  template: PolicyTemplate
+}
+
