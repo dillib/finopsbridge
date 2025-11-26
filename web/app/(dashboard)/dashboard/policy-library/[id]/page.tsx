@@ -50,7 +50,7 @@ export default function TemplateDetailsPage() {
       const token = await getToken()
       if (!token) return
 
-      const data = await apiRequestWithAuth(`/api/policy-templates/${params.id}`, token)
+      const data = await apiRequestWithAuth<PolicyTemplate>(`/api/policy-templates/${params.id}`, token)
       setTemplate(data)
 
       // Pre-fill form
