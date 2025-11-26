@@ -619,3 +619,19 @@ func (h *Handlers) DeleteWebhook(c *fiber.Ctx) error {
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
+func (h *Handlers) ListViolations(c *fiber.Ctx) error {
+	orgID := middleware.GetOrgID(c)
+
+	var violations []models.PolicyViolation
+	if err := h.DB.Joins("JOIN policies ON policies.id = policy_violations.policy_id").
+		Where("policies.organization_id = ?", orgID).
+		Order("policy_violations.created_at DESC").
+		Find(&violations).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to fetch violations",
+		})
+	}
+
+	return c.JSON(violations)
+}
+

@@ -12,7 +12,9 @@
       "Bash(npx vercel logs:*)",
       "Bash(curl:*)",
       "Bash(go build:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(npx shadcn@latest add table:*)",
+      "Bash(npx vercel:*)"
     ],
     "deny": [],
     "ask": []

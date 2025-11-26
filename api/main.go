@@ -94,6 +94,21 @@ func main() {
 	api.Post("/webhooks", h.CreateWebhook)
 	api.Delete("/webhooks/:id", h.DeleteWebhook)
 
+	// Policy Violations
+	api.Get("/violations", h.ListViolations)
+
+	// Policy Templates & Library
+	api.Get("/policy-categories", h.ListPolicyCategories)
+	api.Get("/policy-templates", h.ListPolicyTemplates)
+	api.Get("/policy-templates/:id", h.GetPolicyTemplate)
+	api.Post("/policy-templates/:id/deploy", h.DeployPolicyTemplate)
+
+	// AI Recommendations
+	api.Post("/recommendations/generate", h.GenerateRecommendations)
+	api.Get("/recommendations", h.ListRecommendations)
+	api.Post("/recommendations/:id/accept", h.AcceptRecommendation)
+	api.Post("/recommendations/:id/reject", h.RejectRecommendation)
+
 	// Start enforcement worker
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

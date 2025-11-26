@@ -97,6 +97,70 @@ type Webhook struct {
 	UpdatedAt      time.Time
 }
 
+type PolicyCategory struct {
+	ID          string `gorm:"primaryKey"`
+	Name        string `gorm:"not null;uniqueIndex"`
+	Description string
+	Icon        string
+	SortOrder   int
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	Templates   []PolicyTemplate `gorm:"foreignKey:CategoryID"`
+}
+
+type PolicyTemplate struct {
+	ID                  string `gorm:"primaryKey"`
+	CategoryID          string `gorm:"index;not null"`
+	Name                string `gorm:"not null"`
+	Description         string `gorm:"type:text"`
+	PolicyType          string `gorm:"not null"` // max_spend, auto_stop_idle, etc.
+	DefaultConfig       string `gorm:"type:text"` // JSON default parameters
+	RegoTemplate        string `gorm:"type:text;not null"` // OPA Rego template
+	EstimatedSavings    string // e.g., "15-30%", "$5K-20K/month"
+	Difficulty          string `gorm:"default:easy"` // easy, medium, hard
+	RequiredPermissions string `gorm:"type:text"` // JSON array of required cloud permissions
+	Tags                string `gorm:"type:text"` // JSON array of tags
+	CloudProviders      string `gorm:"type:text"` // JSON array: ["aws", "azure", "gcp", "oci", "ibm"]
+	ComplianceFrameworks string `gorm:"type:text"` // JSON array: ["soc2", "hipaa", "pci-dss"]
+	BusinessImpact      string `gorm:"type:text"` // Description of business value
+	UsageCount          int    `gorm:"default:0"` // Track popularity
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+}
+
+type PolicyRecommendation struct {
+	ID                string `gorm:"primaryKey"`
+	OrganizationID    string `gorm:"index;not null"`
+	PolicyTemplateID  string `gorm:"index;not null"`
+	Status            string `gorm:"default:pending"` // pending, accepted, rejected, deployed
+	ConfidenceScore   float64 // 0.0 to 1.0
+	EstimatedMonthlySavings float64
+	RecommendationReason string `gorm:"type:text"` // AI-generated explanation
+	DetectedIssues    string `gorm:"type:text"` // JSON array of detected waste/issues
+	SuggestedConfig   string `gorm:"type:text"` // JSON suggested policy configuration
+	Priority          string `gorm:"default:medium"` // low, medium, high, critical
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	DeployedAt        *time.Time
+	RejectedAt        *time.Time
+	RejectionReason   string
+}
+
+type PolicyAdoptionMetrics struct {
+	ID                  string `gorm:"primaryKey"`
+	OrganizationID      string `gorm:"index;not null"`
+	PolicyID            string `gorm:"index;not null"`
+	Month               string `gorm:"not null"` // YYYY-MM format
+	ViolationCount      int
+	RemediationCount    int
+	CostSavings         float64
+	ResourcesAffected   int
+	ComplianceScore     float64 // 0.0 to 100.0
+	AverageRemediationTime int // seconds
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+}
+
 // BeforeCreate hooks
 func (u *User) BeforeCreate(tx *gorm.DB) error {
 	if u.ID == "" {
@@ -150,6 +214,34 @@ func (we *WaitlistEntry) BeforeCreate(tx *gorm.DB) error {
 func (w *Webhook) BeforeCreate(tx *gorm.DB) error {
 	if w.ID == "" {
 		w.ID = generateID()
+	}
+	return nil
+}
+
+func (pc *PolicyCategory) BeforeCreate(tx *gorm.DB) error {
+	if pc.ID == "" {
+		pc.ID = generateID()
+	}
+	return nil
+}
+
+func (pt *PolicyTemplate) BeforeCreate(tx *gorm.DB) error {
+	if pt.ID == "" {
+		pt.ID = generateID()
+	}
+	return nil
+}
+
+func (pr *PolicyRecommendation) BeforeCreate(tx *gorm.DB) error {
+	if pr.ID == "" {
+		pr.ID = generateID()
+	}
+	return nil
+}
+
+func (pam *PolicyAdoptionMetrics) BeforeCreate(tx *gorm.DB) error {
+	if pam.ID == "" {
+		pam.ID = generateID()
 	}
 	return nil
 }
