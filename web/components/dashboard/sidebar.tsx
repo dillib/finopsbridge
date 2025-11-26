@@ -4,7 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { LayoutDashboard, Shield, Activity, Settings, Cloud, Building2, AlertTriangle, Library, Sparkles } from "lucide-react"
-import { OrganizationSwitcher, UserButton } from "@clerk/nextjs"
+import { OrganizationSwitcher, UserButton, useUser } from "@clerk/nextjs"
 import { Suspense } from "react"
 
 const navItems = [
@@ -39,6 +39,43 @@ function OrganizationSwitcherFallback() {
     <div className="flex items-center space-x-2 text-sm text-muted-foreground">
       <Building2 className="h-4 w-4" />
       <span>Loading...</span>
+    </div>
+  )
+}
+
+function UserProfile() {
+  const { user } = useUser()
+
+  if (!user) {
+    return (
+      <div className="flex items-center space-x-3 px-4 py-2">
+        <div className="h-8 w-8 rounded-full bg-muted animate-pulse" />
+        <div className="flex-1">
+          <div className="h-4 bg-muted rounded animate-pulse mb-1" />
+          <div className="h-3 bg-muted rounded w-2/3 animate-pulse" />
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex items-center space-x-3 px-4 py-2 hover:bg-accent rounded-lg transition-colors">
+      <UserButton
+        afterSignOutUrl="/"
+        appearance={{
+          elements: {
+            avatarBox: "h-8 w-8"
+          }
+        }}
+      />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium truncate">
+          {user.fullName || user.firstName || "User"}
+        </p>
+        <p className="text-xs text-muted-foreground truncate">
+          {user.primaryEmailAddress?.emailAddress}
+        </p>
+      </div>
     </div>
   )
 }
@@ -78,15 +115,17 @@ export function Sidebar() {
         })}
       </nav>
       <div className="mt-auto pt-6 border-t">
-        <UserButton
-          afterSignOutUrl="/"
-          appearance={{
-            elements: {
-              rootBox: "w-full",
-              userButtonTrigger: "w-full justify-start"
-            }
-          }}
-        />
+        <Suspense fallback={
+          <div className="flex items-center space-x-3 px-4 py-2">
+            <div className="h-8 w-8 rounded-full bg-muted animate-pulse" />
+            <div className="flex-1">
+              <div className="h-4 bg-muted rounded animate-pulse mb-1" />
+              <div className="h-3 bg-muted rounded w-2/3 animate-pulse" />
+            </div>
+          </div>
+        }>
+          <UserProfile />
+        </Suspense>
       </div>
     </aside>
   )
