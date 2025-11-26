@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
-import { apiRequestWithAuth } from "@/lib/utils"
+import { apiRequestWithAuth } from "@/lib/api"
 import type { PolicyTemplate } from "@/lib/types"
 import {
   ArrowLeft,

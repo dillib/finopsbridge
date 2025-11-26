@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/hooks/use-toast"
-import { apiRequestWithAuth } from "@/lib/utils"
+import { apiRequestWithAuth } from "@/lib/api"
 import type { PolicyCategory, PolicyTemplate } from "@/lib/types"
 import {
   Search,
