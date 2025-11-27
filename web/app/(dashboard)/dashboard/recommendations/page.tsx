@@ -83,7 +83,7 @@ export default function RecommendationsPage() {
       const token = await getToken()
       if (!token) return
 
-      const data = await apiRequestWithAuth("/api/recommendations/generate", token, {
+      const data = await apiRequestWithAuth<RecommendationWithTemplate[]>("/api/recommendations/generate", token, {
         method: "POST",
       })
 
