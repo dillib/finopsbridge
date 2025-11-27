@@ -635,3 +635,20 @@ func (h *Handlers) ListViolations(c *fiber.Ctx) error {
 	return c.JSON(violations)
 }
 
+// Helper method to log activity
+func (h *Handlers) logActivity(orgID, activityType, message string, metadata map[string]interface{}) {
+	var metadataJSON string
+	if metadata != nil {
+		metadataBytes, _ := json.Marshal(metadata)
+		metadataJSON = string(metadataBytes)
+	}
+
+	activityLog := models.ActivityLog{
+		OrganizationID: orgID,
+		Type:           activityType,
+		Message:        message,
+		Metadata:       metadataJSON,
+	}
+	h.DB.Create(&activityLog)
+}
+

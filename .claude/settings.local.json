@@ -14,7 +14,8 @@
       "Bash(go build:*)",
       "Bash(npm run build:*)",
       "Bash(npx shadcn@latest add table:*)",
-      "Bash(npx vercel:*)"
+      "Bash(npx vercel:*)",
+      "Bash(go run:*)"
     ],
     "deny": [],
     "ask": []

@@ -1,8 +1,6 @@
 package handlers
 
 import (
-	"encoding/json"
-
 	models "finopsbridge/api/internal/models_"
 
 	"github.com/gofiber/fiber/v2"
