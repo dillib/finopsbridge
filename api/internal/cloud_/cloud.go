@@ -143,11 +143,11 @@ func FetchAzureBilling(ctx context.Context, provider models.CloudProvider, cfg *
 		for _, usage := range page.Value {
 			// Handle legacy usage detail format
 			if legacyUsage, ok := usage.(*armconsumption.LegacyUsageDetail); ok {
-				if legacyUsage.Properties != nil && legacyUsage.Properties.CostInBillingCurrency != nil {
-					totalCost += *legacyUsage.Properties.CostInBillingCurrency
+				if legacyUsage.Properties != nil && legacyUsage.Properties.Cost != nil {
+					totalCost += *legacyUsage.Properties.Cost
 				}
-				if legacyUsage.Properties != nil && legacyUsage.Properties.BillingCurrency != nil {
-					currency = *legacyUsage.Properties.BillingCurrency
+				if legacyUsage.Properties != nil && legacyUsage.Properties.Currency != nil {
+					currency = *legacyUsage.Properties.Currency
 				}
 			}
 			// Handle modern usage detail format
@@ -407,7 +407,7 @@ func FetchOCIBilling(ctx context.Context, provider models.CloudProvider, cfg *co
 	// Aggregate costs from response
 	for _, item := range response.Items {
 		if item.ComputedAmount != nil {
-			totalCost += *item.ComputedAmount
+			totalCost += float64(*item.ComputedAmount)
 		}
 		if item.Currency != nil {
 			currency = *item.Currency
