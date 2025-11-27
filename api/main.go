@@ -102,6 +102,7 @@ func main() {
 	api.Get("/policy-templates", h.ListPolicyTemplates)
 	api.Get("/policy-templates/:id", h.GetPolicyTemplate)
 	api.Post("/policy-templates/:id/deploy", h.DeployPolicyTemplate)
+	api.Post("/seed", h.SeedDatabase) // Temporary endpoint to seed database
 
 	// AI Recommendations
 	api.Post("/recommendations/generate", h.GenerateRecommendations)
